@@ -20,6 +20,14 @@ export interface MemoryCard {
 export type StudyMode = "blanks" | "type";
 export type TypeSubMode = "firstLetter" | "freeType";
 
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  verseReference?: string;
+  createdAt: string;
+}
+
 export type NewMemoryCard = Pick<
   MemoryCard,
   "id" | "verseReference" | "verseText" | "translation"
@@ -32,6 +40,7 @@ interface AppState {
   studyMode: StudyMode;
   typeSubMode: TypeSubMode;
   difficulty: Difficulty;
+  chatMessages: ChatMessage[];
   setTokenBalance: (amount: number) => void;
   addTokens: (amount: number) => void;
   spendTokens: (amount: number) => boolean;
@@ -41,6 +50,8 @@ interface AppState {
   setStudyMode: (mode: StudyMode) => void;
   setTypeSubMode: (mode: TypeSubMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
+  addChatMessage: (message: ChatMessage) => void;
+  clearChat: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -52,6 +63,7 @@ export const useAppStore = create<AppState>()(
       studyMode: "blanks",
       typeSubMode: "firstLetter",
       difficulty: "medium",
+      chatMessages: [],
 
       setTokenBalance: (amount) => set({ tokenBalance: amount }),
 
@@ -106,6 +118,11 @@ export const useAppStore = create<AppState>()(
       setTypeSubMode: (mode) => set({ typeSubMode: mode }),
 
       setDifficulty: (difficulty) => set({ difficulty }),
+
+      addChatMessage: (message) =>
+        set((state) => ({ chatMessages: [...state.chatMessages, message] })),
+
+      clearChat: () => set({ chatMessages: [] }),
     }),
     {
       name: "biblestudyapp-storage",

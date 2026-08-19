@@ -124,6 +124,47 @@ export default function ChapterScreen() {
                 >
                   “{selectedVerse.text}”
                 </Text>
+                <View className="flex-row mb-3" style={{ gap: 8 }}>
+                  <Pressable
+                    onPress={() => {
+                      const verse = selectedVerse;
+                      setSelectedVerse(null);
+                      router.push({
+                        pathname: "/ai",
+                        params: {
+                          verseRef: `${johnData.name} ${chapterNum}:${verse.verse}`,
+                          verseText: verse.text,
+                          autoAsk: "insights",
+                        },
+                      });
+                    }}
+                    className="flex-1 flex-row items-center justify-center rounded-2xl py-3 active:opacity-70"
+                    style={{ backgroundColor: "#4A6FA51A", borderWidth: 1, borderColor: "#4A6FA540" }}
+                  >
+                    <Ionicons name="sparkles" size={16} color="#4A6FA5" />
+                    <Text className="text-sm font-semibold text-brand-blue ml-1.5">
+                      Get Insights
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const verse = selectedVerse;
+                      setSelectedVerse(null);
+                      router.push({
+                        pathname: "/ai",
+                        params: {
+                          verseRef: `${johnData.name} ${chapterNum}:${verse.verse}`,
+                          verseText: verse.text,
+                        },
+                      });
+                    }}
+                    className="flex-1 flex-row items-center justify-center rounded-2xl py-3 active:opacity-70"
+                    style={{ backgroundColor: "#4A6FA51A", borderWidth: 1, borderColor: "#4A6FA540" }}
+                  >
+                    <Ionicons name="chatbubble-ellipses" size={16} color="#4A6FA5" />
+                    <Text className="text-sm font-semibold text-brand-blue ml-1.5">Ask AI</Text>
+                  </Pressable>
+                </View>
                 <Pressable
                   onPress={() => {
                     if (!cardId) return;
