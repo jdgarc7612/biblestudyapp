@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +16,7 @@ export default function ReviewScreen() {
   const studyMode = useAppStore((state) => state.studyMode);
   const typeSubMode = useAppStore((state) => state.typeSubMode);
   const reviewCard = useAppStore((state) => state.reviewCard);
+  const awardPerfectRecallBonus = useAppStore((state) => state.awardPerfectRecallBonus);
 
   const queue = useMemo(() => {
     const due = memoryDeck.filter((c) => isDue(c.dueDate));
@@ -25,14 +26,24 @@ export default function ReviewScreen() {
 
   const [index, setIndex] = useState(0);
   const currentCard = memoryDeck.find((c) => c.id === queue[index]);
+  const sessionGrades = useRef<Grade[]>([]);
+  const perfectBonusChecked = useRef(false);
 
   const handleGrade = (grade: Grade) => {
     if (!currentCard) return;
     reviewCard(currentCard.id, grade);
+    sessionGrades.current.push(grade);
     setIndex((i) => i + 1);
   };
 
   const isComplete = queue.length === 0 || index >= queue.length;
+
+  useEffect(() => {
+    if (!isComplete || queue.length === 0 || perfectBonusChecked.current) return;
+    perfectBonusChecked.current = true;
+    const allEasy = sessionGrades.current.length > 0 && sessionGrades.current.every((g) => g === "easy");
+    if (allEasy) awardPerfectRecallBonus();
+  }, [isComplete, queue.length, awardPerfectRecallBonus]);
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top", "bottom"]}>

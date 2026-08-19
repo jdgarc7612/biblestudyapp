@@ -16,7 +16,8 @@ function getGreeting() {
 
 export default function HomeScreen() {
   const tokenBalance = useAppStore((state) => state.tokenBalance);
-  const streakDays = useAppStore((state) => state.streakDays);
+  const currentReadStreak = useAppStore((state) => state.currentReadStreak);
+  const currentMemoryStreak = useAppStore((state) => state.currentMemoryStreak);
 
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
@@ -68,30 +69,45 @@ export default function HomeScreen() {
           </Pressable>
         </Link>
 
-        <View className="flex-row mt-4" style={{ gap: 12 }}>
-          <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-5 py-4">
-            <View className="flex-row items-center mb-1" style={{ gap: 6 }}>
-              <Ionicons name="flame" size={16} color="#C19A6B" />
-              <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-                Streak
-              </Text>
+        <Link href="/profile" asChild>
+          <Pressable className="active:opacity-70">
+            <View className="flex-row mt-4" style={{ gap: 10 }}>
+              <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-4">
+                <View className="flex-row items-center mb-1" style={{ gap: 5 }}>
+                  <Ionicons name="book" size={14} color="#4A6FA5" />
+                  <Text className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                    Read
+                  </Text>
+                </View>
+                <Text className="text-xl font-bold text-gray-900 dark:text-white">
+                  {currentReadStreak}d
+                </Text>
+              </View>
+              <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-4">
+                <View className="flex-row items-center mb-1" style={{ gap: 5 }}>
+                  <Ionicons name="flame" size={14} color="#C19A6B" />
+                  <Text className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                    Memory
+                  </Text>
+                </View>
+                <Text className="text-xl font-bold text-gray-900 dark:text-white">
+                  {currentMemoryStreak}d
+                </Text>
+              </View>
+              <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-4">
+                <View className="flex-row items-center mb-1" style={{ gap: 5 }}>
+                  <Ionicons name="sparkles" size={14} color="#4A6FA5" />
+                  <Text className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                    Tokens
+                  </Text>
+                </View>
+                <Text className="text-xl font-bold text-gray-900 dark:text-white">
+                  {tokenBalance}
+                </Text>
+              </View>
             </View>
-            <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-              {streakDays} {streakDays === 1 ? "day" : "days"}
-            </Text>
-          </View>
-          <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-5 py-4">
-            <View className="flex-row items-center mb-1" style={{ gap: 6 }}>
-              <Ionicons name="sparkles" size={16} color="#4A6FA5" />
-              <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-                Tokens
-              </Text>
-            </View>
-            <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-              {tokenBalance}
-            </Text>
-          </View>
-        </View>
+          </Pressable>
+        </Link>
 
         <Text className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mt-8 mb-3">
           Continue your journey

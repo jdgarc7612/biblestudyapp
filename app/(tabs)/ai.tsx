@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { FormattedText } from "../../components/ai/formatted-text";
 import { serifFont } from "../../constants/fonts";
+import { localDateString } from "../../lib/date";
 import { generateInsightRequestPrompt, generateMockAnswer, VerseContext } from "../../lib/mock-ai";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -44,6 +45,14 @@ export default function AskAIScreen() {
 
   const chatMessages = useAppStore((state) => state.chatMessages);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
+  const recordAiQuestionAsked = useAppStore((state) => state.recordAiQuestionAsked);
+  const claimOnboardingBonus = useAppStore((state) => state.claimOnboardingBonus);
+  const aiFreeQuestionsAskedToday = useAppStore((state) => state.aiFreeQuestionsAskedToday);
+  const aiFreeQuestionsAskedTodayDate = useAppStore((state) => state.aiFreeQuestionsAskedTodayDate);
+  const aiFreeDailyAllowance = useAppStore((state) => state.aiFreeDailyAllowance);
+  const aiEarnedTokenQuestionsThisMonth = useAppStore((state) => state.aiEarnedTokenQuestionsThisMonth);
+  const aiEarnedTokenQuestionsMonthDate = useAppStore((state) => state.aiEarnedTokenQuestionsMonthDate);
+  const aiEarnedTokenMonthlyCap = useAppStore((state) => state.aiEarnedTokenMonthlyCap);
 
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -51,9 +60,19 @@ export default function AskAIScreen() {
   const handledParamsKey = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
+  const today = localDateString();
+  const freeAskedToday =
+    aiFreeQuestionsAskedTodayDate === today ? aiFreeQuestionsAskedToday : 0;
+  const freeQuestionsRemaining = Math.max(0, aiFreeDailyAllowance - freeAskedToday);
+  const earnedAskedThisMonth =
+    aiEarnedTokenQuestionsMonthDate === today.slice(0, 7) ? aiEarnedTokenQuestionsThisMonth : 0;
+  const earnedQuestionsRemaining = Math.max(0, aiEarnedTokenMonthlyCap - earnedAskedThisMonth);
+  const canSend = freeQuestionsRemaining > 0 || earnedQuestionsRemaining > 0;
+
   const sendMessage = (content: string, contextOverride?: VerseContext | null) => {
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed || !canSend) return;
+
     const context = contextOverride !== undefined ? contextOverride : activeContext;
 
     addChatMessage({
@@ -65,6 +84,8 @@ export default function AskAIScreen() {
     });
     setInput("");
     setIsThinking(true);
+    recordAiQuestionAsked();
+    claimOnboardingBonus("firstAiQuestion");
 
     setTimeout(() => {
       addChatMessage({
@@ -139,12 +160,14 @@ export default function AskAIScreen() {
                 <Pressable
                   key={label}
                   onPress={() => sendMessage(prompt)}
+                  disabled={!canSend}
                   className="rounded-2xl px-4 py-3 active:opacity-70"
                   style={{
                     backgroundColor: "#4A6FA50D",
                     borderWidth: 1,
                     borderColor: "#4A6FA533",
                     width: "47%",
+                    opacity: canSend ? 1 : 0.4,
                   }}
                 >
                   <Text className="text-sm font-semibold text-brand-blue">{label}</Text>
@@ -160,6 +183,8 @@ export default function AskAIScreen() {
                 <Pressable
                   key={prompt}
                   onPress={() => sendMessage(prompt)}
+                  disabled={!canSend}
+                  style={{ opacity: canSend ? 1 : 0.4 }}
                   className="flex-row items-center justify-between rounded-2xl px-4 py-3 border border-gray-100 dark:border-gray-800 active:opacity-70"
                 >
                   <Text className="text-sm text-gray-700 dark:text-gray-200 flex-1 pr-2">
@@ -226,23 +251,41 @@ export default function AskAIScreen() {
           </View>
         )}
 
+        {!canSend ? (
+          <View className="flex-row items-center mx-5 mb-2 px-3 py-2.5 rounded-xl bg-brand-earth/10">
+            <Ionicons name="hourglass-outline" size={14} color="#C19A6B" />
+            <Text className="flex-1 text-xs text-gray-600 dark:text-gray-300 ml-2">
+              You've used today's free questions — come back tomorrow for more.
+            </Text>
+          </View>
+        ) : (
+          freeQuestionsRemaining <= 1 && (
+            <Text className="text-[11px] text-gray-400 dark:text-gray-500 mx-5 mb-1.5">
+              {freeQuestionsRemaining} free {freeQuestionsRemaining === 1 ? "question" : "questions"}{" "}
+              left today
+            </Text>
+          )
+        )}
+
         <View className="flex-row items-end px-5 pb-4 pt-2" style={{ gap: 8 }}>
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Ask a question…"
+            placeholder={canSend ? "Ask a question…" : "Come back tomorrow for more questions"}
             placeholderTextColor="#9CA3AF"
             multiline
+            editable={canSend}
             className="flex-1 text-base text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3"
-            style={{ maxHeight: 100 }}
+            style={{ maxHeight: 100, opacity: canSend ? 1 : 0.6 }}
           />
           <Pressable
             onPress={() => sendMessage(input)}
-            disabled={input.trim().length === 0}
+            disabled={input.trim().length === 0 || !canSend}
+            accessibilityLabel="Send"
             className="w-11 h-11 rounded-full items-center justify-center active:opacity-80"
             style={{
               backgroundColor: "#4A6FA5",
-              opacity: input.trim().length === 0 ? 0.4 : 1,
+              opacity: input.trim().length === 0 || !canSend ? 0.4 : 1,
             }}
           >
             <Ionicons name="arrow-up" size={20} color="#FFFFFF" />

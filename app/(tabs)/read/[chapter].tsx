@@ -1,12 +1,24 @@
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useRef, useState } from "react";
-import { Modal, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import johnData from "../../../data/bible/john.json";
 import { serifFont } from "../../../constants/fonts";
+import { localDateString } from "../../../lib/date";
 import { useAppStore } from "../../../store/useAppStore";
+
+const READ_ENGAGEMENT_SECONDS = 20;
 
 function parseCardRange(id: string): { chapter: number; start: number; end: number } | null {
   const parts = id.split("-");
@@ -24,6 +36,33 @@ export default function ChapterScreen() {
   const memoryDeck = useAppStore((state) => state.memoryDeck);
   const addToMemoryDeck = useAppStore((state) => state.addToMemoryDeck);
   const removeFromMemoryDeck = useAppStore((state) => state.removeFromMemoryDeck);
+  const logReadEngagement = useAppStore((state) => state.logReadEngagement);
+  const lastReadDate = useAppStore((state) => state.lastReadDate);
+  const readToday = lastReadDate === localDateString();
+
+  const engagementLoggedRef = useRef(false);
+  useEffect(() => {
+    engagementLoggedRef.current = false;
+    const timer = setTimeout(() => {
+      engagementLoggedRef.current = true;
+      logReadEngagement();
+    }, READ_ENGAGEMENT_SECONDS * 1000);
+    return () => clearTimeout(timer);
+  }, [chapterNum, logReadEngagement]);
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (engagementLoggedRef.current) return;
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 40) {
+      engagementLoggedRef.current = true;
+      logReadEngagement();
+    }
+  };
+
+  const handleMarkAsRead = () => {
+    engagementLoggedRef.current = true;
+    logReadEngagement();
+  };
 
   // `anchor` is the first verse tapped; `focus` is the most recently tapped verse.
   // The selected range is always [min(anchor, focus), max(anchor, focus)].
@@ -125,12 +164,25 @@ export default function ChapterScreen() {
         <Text className="text-base font-semibold text-gray-900 dark:text-white">
           {johnData.name} {chapterNum}
         </Text>
-        <View style={{ width: 26 }} />
+        <Pressable
+          onPress={handleMarkAsRead}
+          hitSlop={8}
+          className="p-1 active:opacity-60"
+          accessibilityLabel={readToday ? "Marked as read today" : "Mark as Read"}
+        >
+          <Ionicons
+            name={readToday ? "checkmark-circle" : "checkmark-circle-outline"}
+            size={22}
+            color={readToday ? "#16A34A" : "#9CA3AF"}
+          />
+        </Pressable>
       </View>
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
       >
         <Text
           style={{ fontFamily: serifFont }}
