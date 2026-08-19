@@ -40,29 +40,29 @@ export function WordBankRecall({
 
   const blankSet = useMemo(() => new Set(blankIndices), [blankIndices]);
 
-  const bank = useMemo(() => {
-    const blanks = blankIndices.map((i) => words[i]);
-    const usedNorm = new Set(blanks.map(normalize));
-    const decoyPool = words.filter(
-      (w, i) => !blankSet.has(i) && wordCore(w).length > 1 && !usedNorm.has(normalize(w))
-    );
-    const decoyCount = Math.min(decoyPool.length, blanks.length, 4);
-    const decoys = seededShuffle(decoyPool, `${card.id}-decoys`).slice(0, decoyCount);
-    const combined = [...blanks, ...decoys].map((text, id) => ({ id, text }));
-    return seededShuffle(combined, `${card.id}-bank`);
-  }, [words, blankIndices, blankSet, card.id]);
-
   const [filled, setFilled] = useState<Record<number, string>>({});
-  const [usedBankIds, setUsedBankIds] = useState<Set<number>>(new Set());
 
   const filledCount = Object.keys(filled).length;
   const isComplete = filledCount === blankIndices.length;
   const nextBlankIndex = blankIndices[filledCount];
 
-  const handlePick = (bankId: number, text: string) => {
-    if (isComplete || usedBankIds.has(bankId)) return;
+  // Fresh options per blank — always includes that blank's correct word, so a
+  // wrong guess on one blank never uses up the word another blank needs.
+  const currentOptions = useMemo(() => {
+    if (isComplete) return [];
+    const correctWord = words[nextBlankIndex];
+    const decoyPool = words.filter(
+      (w, i) => i !== nextBlankIndex && wordCore(w).length > 1 && normalize(w) !== normalize(correctWord)
+    );
+    const decoyCount = Math.min(decoyPool.length, 3);
+    const decoys = seededShuffle(decoyPool, `${card.id}-${nextBlankIndex}-decoys`).slice(0, decoyCount);
+    const combined = [correctWord, ...decoys].map((text, id) => ({ id, text }));
+    return seededShuffle(combined, `${card.id}-${nextBlankIndex}-order`);
+  }, [words, nextBlankIndex, isComplete, card.id]);
+
+  const handlePick = (text: string) => {
+    if (isComplete) return;
     setFilled((prev) => ({ ...prev, [nextBlankIndex]: text }));
-    setUsedBankIds((prev) => new Set(prev).add(bankId));
   };
 
   const correctCount = blankIndices.filter(
@@ -116,30 +116,25 @@ export function WordBankRecall({
 
       {!isComplete ? (
         <View className="flex-row flex-wrap mt-8" style={{ gap: 8 }}>
-          {bank.map(({ id, text }) => {
-            const used = usedBankIds.has(id);
-            return (
-              <Pressable
-                key={id}
-                onPress={() => handlePick(id, text)}
-                disabled={used}
-                className="rounded-full px-4 py-2 active:opacity-70"
-                style={{
-                  backgroundColor: used ? "#F3F4F6" : "#4A6FA51A",
-                  borderWidth: 1,
-                  borderColor: used ? "#E5E7EB" : "#4A6FA540",
-                  opacity: used ? 0.4 : 1,
-                }}
+          {currentOptions.map(({ id, text }) => (
+            <Pressable
+              key={id}
+              onPress={() => handlePick(text)}
+              className="rounded-full px-4 py-2 active:opacity-70"
+              style={{
+                backgroundColor: "#4A6FA51A",
+                borderWidth: 1,
+                borderColor: "#4A6FA540",
+              }}
+            >
+              <Text
+                style={{ fontFamily: serifFont, color: "#4A6FA5" }}
+                className="text-base font-medium"
               >
-                <Text
-                  style={{ fontFamily: serifFont, color: used ? "#9CA3AF" : "#4A6FA5" }}
-                  className="text-base font-medium"
-                >
-                  {text}
-                </Text>
-              </Pressable>
-            );
-          })}
+                {text}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       ) : (
         <View className="mt-8">
