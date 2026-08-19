@@ -14,6 +14,7 @@ export default function ReviewScreen() {
   const router = useRouter();
   const memoryDeck = useAppStore((state) => state.memoryDeck);
   const studyMode = useAppStore((state) => state.studyMode);
+  const typeSubMode = useAppStore((state) => state.typeSubMode);
   const reviewCard = useAppStore((state) => state.reviewCard);
 
   const queue = useMemo(() => {
@@ -75,10 +76,10 @@ export default function ReviewScreen() {
               <Text className="text-sm font-semibold text-brand-blue mb-4">
                 {currentCard.verseReference}
               </Text>
-              {studyMode === "typing" && (
+              {studyMode === "type" && typeSubMode === "freeType" && (
                 <TypingRecall card={currentCard} onGrade={handleGrade} />
               )}
-              {studyMode === "firstLetter" && (
+              {studyMode === "type" && typeSubMode === "firstLetter" && (
                 <FirstLetterRecall card={currentCard} onGrade={handleGrade} />
               )}
               {studyMode === "blanks" && (

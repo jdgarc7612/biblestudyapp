@@ -17,7 +17,8 @@ export interface MemoryCard {
   lastReviewed: string | null;
 }
 
-export type StudyMode = "blanks" | "typing" | "firstLetter";
+export type StudyMode = "blanks" | "type";
+export type TypeSubMode = "firstLetter" | "freeType";
 
 export type NewMemoryCard = Pick<
   MemoryCard,
@@ -29,6 +30,7 @@ interface AppState {
   streakDays: number;
   memoryDeck: MemoryCard[];
   studyMode: StudyMode;
+  typeSubMode: TypeSubMode;
   setTokenBalance: (amount: number) => void;
   addTokens: (amount: number) => void;
   spendTokens: (amount: number) => boolean;
@@ -36,6 +38,7 @@ interface AppState {
   removeFromMemoryDeck: (id: string) => void;
   reviewCard: (id: string, grade: Grade) => void;
   setStudyMode: (mode: StudyMode) => void;
+  setTypeSubMode: (mode: TypeSubMode) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -45,6 +48,7 @@ export const useAppStore = create<AppState>()(
       streakDays: 3, // mock reading streak
       memoryDeck: [],
       studyMode: "blanks",
+      typeSubMode: "firstLetter",
 
       setTokenBalance: (amount) => set({ tokenBalance: amount }),
 
@@ -95,6 +99,8 @@ export const useAppStore = create<AppState>()(
         })),
 
       setStudyMode: (mode) => set({ studyMode: mode }),
+
+      setTypeSubMode: (mode) => set({ typeSubMode: mode }),
     }),
     {
       name: "biblestudyapp-storage",

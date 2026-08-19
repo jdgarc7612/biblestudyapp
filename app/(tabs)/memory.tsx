@@ -1,9 +1,10 @@
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useState } from "react";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useAppStore, StudyMode } from "../../store/useAppStore";
+import { useAppStore, StudyMode, TypeSubMode } from "../../store/useAppStore";
 import { daysUntilDue, isDue } from "../../lib/srs";
 
 const MODES: { mode: StudyMode; label: string; description: string }[] = [
@@ -13,14 +14,22 @@ const MODES: { mode: StudyMode; label: string; description: string }[] = [
     description: "Tap the missing words in the right order",
   },
   {
-    mode: "typing",
+    mode: "type",
     label: "Type It Out",
-    description: "Type the verse from memory, get corrected",
+    description: "Type each word, or just its first letter",
   },
+];
+
+const TYPE_SUBMODES: { mode: TypeSubMode; label: string; description: string }[] = [
   {
     mode: "firstLetter",
-    label: "First-Letter Test",
-    description: "Type each word's first letter as you recall it",
+    label: "First Letter",
+    description: "Type just the first letter of each word",
+  },
+  {
+    mode: "freeType",
+    label: "Free Type",
+    description: "Type the entire verse from memory",
   },
 ];
 
@@ -36,9 +45,14 @@ export default function MemoryScreen() {
   const memoryDeck = useAppStore((state) => state.memoryDeck);
   const studyMode = useAppStore((state) => state.studyMode);
   const setStudyMode = useAppStore((state) => state.setStudyMode);
+  const typeSubMode = useAppStore((state) => state.typeSubMode);
+  const setTypeSubMode = useAppStore((state) => state.setTypeSubMode);
   const removeFromMemoryDeck = useAppStore((state) => state.removeFromMemoryDeck);
 
+  const [sheetOpen, setSheetOpen] = useState(false);
+
   const dueCount = memoryDeck.filter((c) => isDue(c.dueDate)).length;
+  const activeSubMode = TYPE_SUBMODES.find((s) => s.mode === typeSubMode)!;
 
   if (memoryDeck.length === 0) {
     return (
@@ -89,10 +103,14 @@ export default function MemoryScreen() {
         <View style={{ gap: 8 }} className="mb-8">
           {MODES.map(({ mode, label, description }) => {
             const active = studyMode === mode;
+            const isType = mode === "type";
             return (
               <Pressable
                 key={mode}
-                onPress={() => setStudyMode(mode)}
+                onPress={() => {
+                  setStudyMode(mode);
+                  if (isType) setSheetOpen(true);
+                }}
                 className="flex-row items-center rounded-2xl px-4 py-3 active:opacity-80"
                 style={{
                   backgroundColor: active ? "#4A6FA51A" : "transparent",
@@ -108,9 +126,17 @@ export default function MemoryScreen() {
                     {label}
                   </Text>
                   <Text className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                    {description}
+                    {isType ? `${activeSubMode.label} · ${activeSubMode.description}` : description}
                   </Text>
                 </View>
+                {isType && (
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={active ? "#4A6FA5" : "#9CA3AF"}
+                    style={{ marginRight: active ? 8 : 0 }}
+                  />
+                )}
                 {active && <Ionicons name="checkmark-circle" size={20} color="#4A6FA5" />}
               </Pressable>
             );
@@ -145,6 +171,63 @@ export default function MemoryScreen() {
           ))}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={sheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSheetOpen(false)}
+      >
+        <Pressable
+          className="flex-1 justify-end"
+          style={{ backgroundColor: "#00000066" }}
+          onPress={() => setSheetOpen(false)}
+        >
+          <Pressable
+            className="bg-white dark:bg-gray-900 rounded-t-3xl px-6 pt-6"
+            style={{ paddingBottom: 36 }}
+          >
+            <Text className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-4">
+              Select mode
+            </Text>
+            {TYPE_SUBMODES.map(({ mode, label, description }, i) => {
+              const selected = typeSubMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  onPress={() => {
+                    setTypeSubMode(mode);
+                    setSheetOpen(false);
+                  }}
+                  className="flex-row items-center py-4 active:opacity-70"
+                  style={
+                    i < TYPE_SUBMODES.length - 1
+                      ? { borderBottomWidth: 1, borderBottomColor: "#F3F4F6" }
+                      : undefined
+                  }
+                >
+                  <View className="flex-1">
+                    <Text
+                      className="text-base font-semibold text-gray-900 dark:text-white"
+                      style={selected ? { color: "#4A6FA5" } : undefined}
+                    >
+                      {label}
+                    </Text>
+                    <Text className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                      {description}
+                    </Text>
+                  </View>
+                  {selected ? (
+                    <Ionicons name="checkmark-circle" size={20} color="#4A6FA5" />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                  )}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
