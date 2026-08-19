@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { addDays, Grade, nextSrsState, toISODate } from "../lib/srs";
+import { addDays, Difficulty, Grade, nextSrsState, toISODate } from "../lib/srs";
 import storage from "../lib/storage";
 
 export interface MemoryCard {
@@ -31,6 +31,7 @@ interface AppState {
   memoryDeck: MemoryCard[];
   studyMode: StudyMode;
   typeSubMode: TypeSubMode;
+  difficulty: Difficulty;
   setTokenBalance: (amount: number) => void;
   addTokens: (amount: number) => void;
   spendTokens: (amount: number) => boolean;
@@ -39,6 +40,7 @@ interface AppState {
   reviewCard: (id: string, grade: Grade) => void;
   setStudyMode: (mode: StudyMode) => void;
   setTypeSubMode: (mode: TypeSubMode) => void;
+  setDifficulty: (difficulty: Difficulty) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -49,6 +51,7 @@ export const useAppStore = create<AppState>()(
       memoryDeck: [],
       studyMode: "blanks",
       typeSubMode: "firstLetter",
+      difficulty: "medium",
 
       setTokenBalance: (amount) => set({ tokenBalance: amount }),
 
@@ -101,6 +104,8 @@ export const useAppStore = create<AppState>()(
       setStudyMode: (mode) => set({ studyMode: mode }),
 
       setTypeSubMode: (mode) => set({ typeSubMode: mode }),
+
+      setDifficulty: (difficulty) => set({ difficulty }),
     }),
     {
       name: "biblestudyapp-storage",

@@ -9,11 +9,12 @@ import {
   wordCore,
 } from "../../lib/blank-words";
 import { normalize, suggestGradeFromAccuracy } from "../../lib/verse-diff";
-import type { MemoryCard } from "../../store/useAppStore";
-import { Grade } from "../../lib/srs";
+import { useAppStore, type MemoryCard } from "../../store/useAppStore";
+import { Difficulty, Grade } from "../../lib/srs";
 import { GradeButtons } from "./grade-buttons";
 
-const MAX_BLANKS = 8;
+const MAX_BLANKS: Record<Difficulty, number> = { easy: 5, medium: 8, hard: 12 };
+const DECOY_COUNT: Record<Difficulty, number> = { easy: 1, medium: 3, hard: 5 };
 
 function capIndices(indices: number[], max: number): number[] {
   if (indices.length <= max) return indices;
@@ -30,13 +31,14 @@ export function WordBankRecall({
   card: MemoryCard;
   onGrade: (grade: Grade) => void;
 }) {
+  const difficulty = useAppStore((state) => state.difficulty);
   const words = useMemo(() => card.verseText.trim().split(/\s+/), [card.verseText]);
 
   const blankIndices = useMemo(() => {
-    const fraction = blankFractionForRepetitions(card.repetitions);
+    const fraction = blankFractionForRepetitions(card.repetitions, difficulty);
     const raw = pickBlankIndices(words.length, fraction, card.id);
-    return capIndices(raw.length ? raw : [Math.floor(words.length / 2)], MAX_BLANKS);
-  }, [words, card.repetitions, card.id]);
+    return capIndices(raw.length ? raw : [Math.floor(words.length / 2)], MAX_BLANKS[difficulty]);
+  }, [words, card.repetitions, card.id, difficulty]);
 
   const blankSet = useMemo(() => new Set(blankIndices), [blankIndices]);
 
@@ -54,11 +56,11 @@ export function WordBankRecall({
     const decoyPool = words.filter(
       (w, i) => i !== nextBlankIndex && wordCore(w).length > 1 && normalize(w) !== normalize(correctWord)
     );
-    const decoyCount = Math.min(decoyPool.length, 3);
+    const decoyCount = Math.min(decoyPool.length, DECOY_COUNT[difficulty]);
     const decoys = seededShuffle(decoyPool, `${card.id}-${nextBlankIndex}-decoys`).slice(0, decoyCount);
     const combined = [correctWord, ...decoys].map((text, id) => ({ id, text }));
     return seededShuffle(combined, `${card.id}-${nextBlankIndex}-order`);
-  }, [words, nextBlankIndex, isComplete, card.id]);
+  }, [words, nextBlankIndex, isComplete, card.id, difficulty]);
 
   const handlePick = (text: string) => {
     if (isComplete) return;

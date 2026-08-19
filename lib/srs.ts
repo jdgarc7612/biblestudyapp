@@ -1,4 +1,5 @@
 export type Grade = "again" | "hard" | "good" | "easy";
+export type Difficulty = "easy" | "medium" | "hard";
 
 const GRADE_QUALITY: Record<Grade, number> = {
   again: 1,

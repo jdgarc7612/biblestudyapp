@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAppStore, StudyMode, TypeSubMode } from "../../store/useAppStore";
-import { daysUntilDue, isDue } from "../../lib/srs";
+import { daysUntilDue, Difficulty, isDue } from "../../lib/srs";
 
 const MODES: { mode: StudyMode; label: string; description: string }[] = [
   {
@@ -18,6 +18,12 @@ const MODES: { mode: StudyMode; label: string; description: string }[] = [
     label: "Type It Out",
     description: "Type each word, or just its first letter",
   },
+];
+
+const DIFFICULTIES: { level: Difficulty; label: string; color: string }[] = [
+  { level: "easy", label: "Easy", color: "#16A34A" },
+  { level: "medium", label: "Medium", color: "#4A6FA5" },
+  { level: "hard", label: "Hard", color: "#DC2626" },
 ];
 
 const TYPE_SUBMODES: { mode: TypeSubMode; label: string; description: string }[] = [
@@ -47,6 +53,8 @@ export default function MemoryScreen() {
   const setStudyMode = useAppStore((state) => state.setStudyMode);
   const typeSubMode = useAppStore((state) => state.typeSubMode);
   const setTypeSubMode = useAppStore((state) => state.setTypeSubMode);
+  const difficulty = useAppStore((state) => state.difficulty);
+  const setDifficulty = useAppStore((state) => state.setDifficulty);
   const removeFromMemoryDeck = useAppStore((state) => state.removeFromMemoryDeck);
 
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -138,6 +146,34 @@ export default function MemoryScreen() {
                   />
                 )}
                 {active && <Ionicons name="checkmark-circle" size={20} color="#4A6FA5" />}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
+          Difficulty
+        </Text>
+        <View className="flex-row mb-8" style={{ gap: 8 }}>
+          {DIFFICULTIES.map(({ level, label, color }) => {
+            const active = difficulty === level;
+            return (
+              <Pressable
+                key={level}
+                onPress={() => setDifficulty(level)}
+                className="flex-1 rounded-2xl items-center py-3 active:opacity-80"
+                style={{
+                  backgroundColor: active ? color : `${color}1A`,
+                  borderWidth: active ? 0 : 1,
+                  borderColor: `${color}40`,
+                }}
+              >
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: active ? "#FFFFFF" : color }}
+                >
+                  {label}
+                </Text>
               </Pressable>
             );
           })}

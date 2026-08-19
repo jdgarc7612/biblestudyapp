@@ -1,3 +1,5 @@
+import type { Difficulty } from "./srs";
+
 function hashSeed(str: string): number {
   let h = 0;
   for (let i = 0; i < str.length; i++) {
@@ -23,11 +25,19 @@ export function pickBlankIndices(wordCount: number, fraction: number, seedKey: s
   return indices;
 }
 
-const BLANK_STEPS = [0.3, 0.4, 0.5, 0.65, 0.75, 0.85];
+const BLANK_STEPS: Record<Difficulty, number[]> = {
+  easy: [0.15, 0.2, 0.3, 0.4, 0.5, 0.6],
+  medium: [0.3, 0.4, 0.5, 0.65, 0.75, 0.85],
+  hard: [0.5, 0.6, 0.7, 0.8, 0.9, 1],
+};
 
 /** How much of a verse to blank, scaling up as a card gets more repetitions under its belt. */
-export function blankFractionForRepetitions(repetitions: number): number {
-  return BLANK_STEPS[Math.min(repetitions, BLANK_STEPS.length - 1)];
+export function blankFractionForRepetitions(
+  repetitions: number,
+  difficulty: Difficulty = "medium"
+): number {
+  const steps = BLANK_STEPS[difficulty];
+  return steps[Math.min(repetitions, steps.length - 1)];
 }
 
 /** Strips leading/trailing punctuation, returning just the letters/digits of a word. */

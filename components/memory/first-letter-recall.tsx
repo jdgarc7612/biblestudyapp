@@ -4,17 +4,25 @@ import { Text, TextInput, View } from "react-native";
 import { serifFont } from "../../constants/fonts";
 import { maskWord, pickBlankIndices, wordCore } from "../../lib/blank-words";
 import { suggestGradeFromAccuracy } from "../../lib/verse-diff";
-import type { MemoryCard } from "../../store/useAppStore";
-import { Grade } from "../../lib/srs";
+import { useAppStore, type MemoryCard } from "../../store/useAppStore";
+import { Difficulty, Grade } from "../../lib/srs";
 import { GradeButtons } from "./grade-buttons";
 
 type WordResult = "pending" | "correct" | "incorrect";
 
-const TIERS = [
-  { label: "Warm-up", hint: "Full verse shown", fraction: 0 },
-  { label: "Recall", hint: "Some words hidden", fraction: 0.5 },
-  { label: "Mastery", hint: "Verse hidden", fraction: 1 },
-] as const;
+const TIER_LABELS = ["Warm-up", "Recall", "Mastery"] as const;
+
+function hintForFraction(fraction: number): string {
+  if (fraction <= 0) return "Full verse shown";
+  if (fraction >= 1) return "Verse hidden";
+  return "Some words hidden";
+}
+
+const TIER_FRACTIONS: Record<Difficulty, [number, number, number]> = {
+  easy: [0, 0.2, 0.4],
+  medium: [0, 0.5, 1],
+  hard: [0.3, 0.65, 1],
+};
 
 function tierIndexForRepetitions(repetitions: number): 0 | 1 | 2 {
   if (repetitions <= 0) return 0;
@@ -29,13 +37,15 @@ export function FirstLetterRecall({
   card: MemoryCard;
   onGrade: (grade: Grade) => void;
 }) {
+  const difficulty = useAppStore((state) => state.difficulty);
   const words = useMemo(() => card.verseText.trim().split(/\s+/), [card.verseText]);
   const tierIndex = tierIndexForRepetitions(card.repetitions);
-  const tier = TIERS[tierIndex];
+  const tierFraction = TIER_FRACTIONS[difficulty][tierIndex];
+  const tier = { label: TIER_LABELS[tierIndex], hint: hintForFraction(tierFraction) };
 
   const blankSet = useMemo(
-    () => new Set(pickBlankIndices(words.length, tier.fraction, card.id)),
-    [words.length, tier.fraction, card.id]
+    () => new Set(pickBlankIndices(words.length, tierFraction, card.id)),
+    [words.length, tierFraction, card.id]
   );
 
   const [results, setResults] = useState<WordResult[]>(() => words.map(() => "pending"));
@@ -67,8 +77,8 @@ export function FirstLetterRecall({
   return (
     <View>
       <View className="flex-row items-center mb-6" style={{ gap: 6 }}>
-        {TIERS.map((t, i) => (
-          <View key={t.label} className="flex-1 flex-row items-center" style={{ gap: 6 }}>
+        {TIER_LABELS.map((label, i) => (
+          <View key={label} className="flex-1 flex-row items-center" style={{ gap: 6 }}>
             <View
               className="flex-1 rounded-full"
               style={{

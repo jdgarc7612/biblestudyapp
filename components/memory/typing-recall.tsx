@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
 import { serifFont } from "../../constants/fonts";
 import { diffVerse, suggestGradeFromAccuracy } from "../../lib/verse-diff";
-import type { MemoryCard } from "../../store/useAppStore";
+import { useAppStore, type MemoryCard } from "../../store/useAppStore";
 import { Grade } from "../../lib/srs";
 import { GradeButtons } from "./grade-buttons";
+
+const HARD_TIME_LIMIT = 60;
 
 export function TypingRecall({
   card,
@@ -14,8 +16,20 @@ export function TypingRecall({
   card: MemoryCard;
   onGrade: (grade: Grade) => void;
 }) {
+  const difficulty = useAppStore((state) => state.difficulty);
   const [typed, setTyped] = useState("");
   const [checked, setChecked] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(HARD_TIME_LIMIT);
+
+  useEffect(() => {
+    if (difficulty !== "hard" || checked) return;
+    if (secondsLeft <= 0) {
+      setChecked(true);
+      return;
+    }
+    const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [difficulty, checked, secondsLeft]);
 
   const result = checked ? diffVerse(card.verseText, typed) : null;
   const suggestedGrade = result ? suggestGradeFromAccuracy(result.accuracy) : undefined;
@@ -24,6 +38,29 @@ export function TypingRecall({
     <View>
       {!checked ? (
         <>
+          {difficulty === "easy" && (
+            <Text
+              style={{ fontFamily: serifFont, color: "#9CA3AF" }}
+              className="text-base leading-7 mb-4 italic"
+            >
+              {card.verseText}
+            </Text>
+          )}
+          {difficulty === "hard" && (
+            <View className="flex-row justify-end mb-2">
+              <View
+                className="rounded-full px-3 py-1"
+                style={{ backgroundColor: secondsLeft <= 10 ? "#DC262615" : "#4A6FA51A" }}
+              >
+                <Text
+                  className="text-xs font-bold"
+                  style={{ color: secondsLeft <= 10 ? "#DC2626" : "#4A6FA5" }}
+                >
+                  0:{secondsLeft.toString().padStart(2, "0")}
+                </Text>
+              </View>
+            </View>
+          )}
           <TextInput
             value={typed}
             onChangeText={setTyped}
