@@ -4,9 +4,9 @@ import { Modal, PanResponder, Pressable, ScrollView, Text, View } from "react-na
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import johnData from "../../data/bible/john.json";
-import { serifFont } from "../../constants/fonts";
-import { useAppStore } from "../../store/useAppStore";
+import johnData from "../../../data/bible/john.json";
+import { serifFont } from "../../../constants/fonts";
+import { useAppStore } from "../../../store/useAppStore";
 
 function parseCardRange(id: string): { chapter: number; start: number; end: number } | null {
   const parts = id.split("-");
@@ -117,7 +117,7 @@ export default function ChapterScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
         <Pressable onPress={() => router.back()} hitSlop={12} className="p-1 active:opacity-60">
           <Ionicons name="chevron-back" size={24} color="#4A6FA5" />

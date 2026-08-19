@@ -2,7 +2,7 @@ import { Link } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import johnData from "../../data/bible/john.json";
+import johnData from "../../../data/bible/john.json";
 
 export default function ReadScreen() {
   return (
