@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAppStore } from "../../store/useAppStore";
 import { isDue, Grade } from "../../lib/srs";
-import { ProgressiveRecall } from "../../components/memory/progressive-recall";
+import { WordBankRecall } from "../../components/memory/word-bank-recall";
 import { FirstLetterRecall } from "../../components/memory/first-letter-recall";
 import { TypingRecall } from "../../components/memory/typing-recall";
 
@@ -81,8 +81,8 @@ export default function ReviewScreen() {
               {studyMode === "firstLetter" && (
                 <FirstLetterRecall card={currentCard} onGrade={handleGrade} />
               )}
-              {studyMode === "progressive" && (
-                <ProgressiveRecall card={currentCard} onGrade={handleGrade} />
+              {studyMode === "blanks" && (
+                <WordBankRecall card={currentCard} onGrade={handleGrade} />
               )}
             </>
           )}

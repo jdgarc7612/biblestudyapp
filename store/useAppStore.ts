@@ -17,7 +17,7 @@ export interface MemoryCard {
   lastReviewed: string | null;
 }
 
-export type StudyMode = "progressive" | "typing" | "firstLetter";
+export type StudyMode = "blanks" | "typing" | "firstLetter";
 
 export type NewMemoryCard = Pick<
   MemoryCard,
@@ -44,7 +44,7 @@ export const useAppStore = create<AppState>()(
       tokenBalance: 100, // mock starting balance
       streakDays: 3, // mock reading streak
       memoryDeck: [],
-      studyMode: "progressive",
+      studyMode: "blanks",
 
       setTokenBalance: (amount) => set({ tokenBalance: amount }),
 

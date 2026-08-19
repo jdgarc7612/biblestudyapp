@@ -13,7 +13,7 @@ function tokenize(text: string): string[] {
   return text.trim().split(/\s+/).filter(Boolean);
 }
 
-function normalize(word: string): string {
+export function normalize(word: string): string {
   return word.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
 }
 

@@ -8,9 +8,9 @@ import { daysUntilDue, isDue } from "../../lib/srs";
 
 const MODES: { mode: StudyMode; label: string; description: string }[] = [
   {
-    mode: "progressive",
-    label: "Progressive Recall",
-    description: "Words fade to blanks as you master a verse",
+    mode: "blanks",
+    label: "Fill in the Blanks",
+    description: "Tap the missing words in the right order",
   },
   {
     mode: "typing",
@@ -19,8 +19,8 @@ const MODES: { mode: StudyMode; label: string; description: string }[] = [
   },
   {
     mode: "firstLetter",
-    label: "First-Letter Hints",
-    description: "Only the first letter of each word is shown",
+    label: "First-Letter Test",
+    description: "Type each word's first letter as you recall it",
   },
 ];
 

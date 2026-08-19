@@ -1,8 +1,3 @@
-export interface WordToken {
-  display: string;
-  isBlank: boolean;
-}
-
 function hashSeed(str: string): number {
   let h = 0;
   for (let i = 0; i < str.length; i++) {
@@ -18,36 +13,55 @@ function shouldBlank(index: number, fraction: number, seed: number): boolean {
   return pseudo < fraction;
 }
 
-function maskWord(word: string, revealFirstLetter: boolean): string {
+/** Returns the sorted indices of words to blank out of `wordCount`, deterministic per seedKey. */
+export function pickBlankIndices(wordCount: number, fraction: number, seedKey: string): number[] {
+  const seed = hashSeed(seedKey);
+  const indices: number[] = [];
+  for (let i = 0; i < wordCount; i++) {
+    if (shouldBlank(i, fraction, seed)) indices.push(i);
+  }
+  return indices;
+}
+
+const BLANK_STEPS = [0.3, 0.4, 0.5, 0.65, 0.75, 0.85];
+
+/** How much of a verse to blank, scaling up as a card gets more repetitions under its belt. */
+export function blankFractionForRepetitions(repetitions: number): number {
+  return BLANK_STEPS[Math.min(repetitions, BLANK_STEPS.length - 1)];
+}
+
+/** Strips leading/trailing punctuation, returning just the letters/digits of a word. */
+export function wordCore(word: string): string {
+  const match = word.match(/^\W*([\p{L}\p{N}']+)\W*$/u);
+  return match ? match[1] : word;
+}
+
+/** Fully masks a word's core (e.g. "loved," -> "_____,"), keeping surrounding punctuation. */
+export function maskWord(word: string): string {
   const match = word.match(/^(\W*)([\p{L}\p{N}']+)(\W*)$/u);
   if (!match) return word;
   const [, lead, core, trail] = match;
-  const visible = revealFirstLetter ? core.slice(0, 1) : "";
-  const masked = visible + "_".repeat(Math.max(core.length - visible.length, 1));
-  return lead + masked + trail;
+  return lead + "_".repeat(Math.max(core.length, 1)) + trail;
 }
 
-const PROGRESSIVE_STEPS = [0, 0.25, 0.45, 0.65, 0.8, 0.9, 1];
-
-export function progressiveBlankFraction(repetitions: number): number {
-  return PROGRESSIVE_STEPS[Math.min(repetitions, PROGRESSIVE_STEPS.length - 1)];
+function mulberry32(seed: number) {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-export function buildProgressiveTokens(
-  text: string,
-  repetitions: number,
-  seedKey: string
-): WordToken[] {
-  const fraction = progressiveBlankFraction(repetitions);
-  const words = text.trim().split(/\s+/);
-  const seed = hashSeed(seedKey);
-  return words.map((word, index) => {
-    const blank = shouldBlank(index, fraction, seed);
-    return { display: blank ? maskWord(word, false) : word, isBlank: blank };
-  });
-}
-
-export function buildFirstLetterTokens(text: string): WordToken[] {
-  const words = text.trim().split(/\s+/);
-  return words.map((word) => ({ display: maskWord(word, true), isBlank: true }));
+/** Deterministic shuffle so a card's word bank order doesn't change across re-renders. */
+export function seededShuffle<T>(items: T[], seedKey: string): T[] {
+  const rand = mulberry32(hashSeed(seedKey));
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }
