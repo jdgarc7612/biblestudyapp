@@ -83,7 +83,9 @@ export function generateMockAnswer(question: string, context?: VerseContext): st
 }
 
 export function generateVerseInsight(context: VerseContext): string {
-  return `**${context.reference}** — "${context.text}"\n\nThis verse rewards slow reading. Try sitting with just a phrase or two of it today rather than rushing to the next one — notice what it says about God's character, and what it might be asking of you in response.\n\nFeel free to ask me anything more specific about this verse — its context in the surrounding passage, how it connects to other parts of Scripture, or how it might apply to what you're facing right now.`;
+  const isRange = context.reference.includes("-");
+  const noun = isRange ? "passage" : "verse";
+  return `**${context.reference}** — "${context.text}"\n\nThis ${noun} rewards slow reading. Try sitting with just a phrase or two of it today rather than rushing ahead — notice what it says about God's character, and what it might be asking of you in response.\n\nFeel free to ask me anything more specific about this ${noun} — its context in the surrounding passage, how it connects to other parts of Scripture, or how it might apply to what you're facing right now.`;
 }
 
 export function generateInsightRequestPrompt(reference: string): string {
