@@ -10,24 +10,25 @@ import { GradeButtons } from "./grade-buttons";
 
 type WordResult = "pending" | "correct" | "incorrect";
 
-const TIER_LABELS = ["Warm-up", "Recall", "Mastery"] as const;
+// Easy/Medium/Hard map directly onto the three tiers — there's no separate
+// automatic progression, so the difficulty picker doubles as tier selection
+// and you can freely switch between Warm-up, Recall, and Mastery any time.
+const TIERS = [
+  { label: "Warm-up", fraction: 0 },
+  { label: "Recall", fraction: 0.5 },
+  { label: "Mastery", fraction: 1 },
+] as const;
+
+const TIER_INDEX_FOR_DIFFICULTY: Record<Difficulty, 0 | 1 | 2> = {
+  easy: 0,
+  medium: 1,
+  hard: 2,
+};
 
 function hintForFraction(fraction: number): string {
   if (fraction <= 0) return "Full verse shown";
   if (fraction >= 1) return "Verse hidden";
   return "Some words hidden";
-}
-
-const TIER_FRACTIONS: Record<Difficulty, [number, number, number]> = {
-  easy: [0, 0.2, 0.4],
-  medium: [0, 0.5, 1],
-  hard: [0.3, 0.65, 1],
-};
-
-function tierIndexForRepetitions(repetitions: number): 0 | 1 | 2 {
-  if (repetitions <= 0) return 0;
-  if (repetitions <= 2) return 1;
-  return 2;
 }
 
 export function FirstLetterRecall({
@@ -39,9 +40,9 @@ export function FirstLetterRecall({
 }) {
   const difficulty = useAppStore((state) => state.difficulty);
   const words = useMemo(() => card.verseText.trim().split(/\s+/), [card.verseText]);
-  const tierIndex = tierIndexForRepetitions(card.repetitions);
-  const tierFraction = TIER_FRACTIONS[difficulty][tierIndex];
-  const tier = { label: TIER_LABELS[tierIndex], hint: hintForFraction(tierFraction) };
+  const tierIndex = TIER_INDEX_FOR_DIFFICULTY[difficulty];
+  const tierFraction = TIERS[tierIndex].fraction;
+  const tier = { label: TIERS[tierIndex].label, hint: hintForFraction(tierFraction) };
 
   const blankSet = useMemo(
     () => new Set(pickBlankIndices(words.length, tierFraction, card.id)),
@@ -77,7 +78,7 @@ export function FirstLetterRecall({
   return (
     <View>
       <View className="flex-row items-center mb-6" style={{ gap: 6 }}>
-        {TIER_LABELS.map((label, i) => (
+        {TIERS.map(({ label }, i) => (
           <View key={label} className="flex-1 flex-row items-center" style={{ gap: 6 }}>
             <View
               className="flex-1 rounded-full"

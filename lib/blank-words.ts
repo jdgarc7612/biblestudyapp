@@ -25,19 +25,18 @@ export function pickBlankIndices(wordCount: number, fraction: number, seedKey: s
   return indices;
 }
 
-const BLANK_STEPS: Record<Difficulty, number[]> = {
-  easy: [0.15, 0.2, 0.3, 0.4, 0.5, 0.6],
-  medium: [0.3, 0.4, 0.5, 0.65, 0.75, 0.85],
-  hard: [0.5, 0.6, 0.7, 0.8, 0.9, 1],
+const BLANK_RANGE: Record<Difficulty, [number, number]> = {
+  easy: [0.3, 0.4],
+  medium: [0.6, 0.75],
+  hard: [1, 1],
 };
 
-/** How much of a verse to blank, scaling up as a card gets more repetitions under its belt. */
-export function blankFractionForRepetitions(
-  repetitions: number,
-  difficulty: Difficulty = "medium"
-): number {
-  const steps = BLANK_STEPS[difficulty];
-  return steps[Math.min(repetitions, steps.length - 1)];
+/** How much of a verse to blank, picked deterministically within the difficulty's target band. */
+export function blankFractionForDifficulty(difficulty: Difficulty, seedKey: string): number {
+  const [min, max] = BLANK_RANGE[difficulty];
+  if (min >= max) return min;
+  const rand = mulberry32(hashSeed(`${seedKey}-fraction`))();
+  return min + rand * (max - min);
 }
 
 /** Strips leading/trailing punctuation, returning just the letters/digits of a word. */

@@ -61,6 +61,7 @@ export default function MemoryScreen() {
 
   const dueCount = memoryDeck.filter((c) => isDue(c.dueDate)).length;
   const activeSubMode = TYPE_SUBMODES.find((s) => s.mode === typeSubMode)!;
+  const isFirstLetterActive = studyMode === "type" && typeSubMode === "firstLetter";
 
   if (memoryDeck.length === 0) {
     return (
@@ -151,10 +152,15 @@ export default function MemoryScreen() {
           })}
         </View>
 
-        <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
+        <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">
           Difficulty
         </Text>
-        <View className="flex-row mb-8" style={{ gap: 8 }}>
+        {isFirstLetterActive && (
+          <Text className="text-xs text-gray-400 dark:text-gray-500 mb-3">
+            Also picks your tier: Warm-up · Recall · Mastery
+          </Text>
+        )}
+        <View className="flex-row mb-8" style={{ gap: 8, marginTop: isFirstLetterActive ? 0 : 8 }}>
           {DIFFICULTIES.map(({ level, label, color }) => {
             const active = difficulty === level;
             return (

@@ -3,26 +3,19 @@ import { Pressable, Text, View } from "react-native";
 
 import { serifFont } from "../../constants/fonts";
 import {
-  blankFractionForRepetitions,
+  blankFractionForDifficulty,
   pickBlankIndices,
   seededShuffle,
   wordCore,
 } from "../../lib/blank-words";
 import { normalize, suggestGradeFromAccuracy } from "../../lib/verse-diff";
 import { useAppStore, type MemoryCard } from "../../store/useAppStore";
-import { Difficulty, Grade } from "../../lib/srs";
+import { Grade } from "../../lib/srs";
 import { GradeButtons } from "./grade-buttons";
 
-const MAX_BLANKS: Record<Difficulty, number> = { easy: 5, medium: 8, hard: 12 };
-const DECOY_COUNT: Record<Difficulty, number> = { easy: 1, medium: 3, hard: 5 };
-
-function capIndices(indices: number[], max: number): number[] {
-  if (indices.length <= max) return indices;
-  const step = indices.length / max;
-  const picked = new Set<number>();
-  for (let i = 0; i < max; i++) picked.add(indices[Math.floor(i * step)]);
-  return indices.filter((i) => picked.has(i));
-}
+// Total options shown per blank (the correct word plus decoys), independent of
+// difficulty — difficulty only changes how much of the verse is blanked.
+const MAX_DECOYS = 5;
 
 export function WordBankRecall({
   card,
@@ -35,10 +28,10 @@ export function WordBankRecall({
   const words = useMemo(() => card.verseText.trim().split(/\s+/), [card.verseText]);
 
   const blankIndices = useMemo(() => {
-    const fraction = blankFractionForRepetitions(card.repetitions, difficulty);
+    const fraction = blankFractionForDifficulty(difficulty, card.id);
     const raw = pickBlankIndices(words.length, fraction, card.id);
-    return capIndices(raw.length ? raw : [Math.floor(words.length / 2)], MAX_BLANKS[difficulty]);
-  }, [words, card.repetitions, card.id, difficulty]);
+    return raw.length ? raw : [Math.floor(words.length / 2)];
+  }, [words, card.id, difficulty]);
 
   const blankSet = useMemo(() => new Set(blankIndices), [blankIndices]);
 
@@ -56,11 +49,11 @@ export function WordBankRecall({
     const decoyPool = words.filter(
       (w, i) => i !== nextBlankIndex && wordCore(w).length > 1 && normalize(w) !== normalize(correctWord)
     );
-    const decoyCount = Math.min(decoyPool.length, DECOY_COUNT[difficulty]);
+    const decoyCount = Math.min(decoyPool.length, MAX_DECOYS);
     const decoys = seededShuffle(decoyPool, `${card.id}-${nextBlankIndex}-decoys`).slice(0, decoyCount);
     const combined = [correctWord, ...decoys].map((text, id) => ({ id, text }));
     return seededShuffle(combined, `${card.id}-${nextBlankIndex}-order`);
-  }, [words, nextBlankIndex, isComplete, card.id, difficulty]);
+  }, [words, nextBlankIndex, isComplete, card.id]);
 
   const handlePick = (text: string) => {
     if (isComplete) return;
