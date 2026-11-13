@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AI_DAILY_QUESTION_LIMIT } from "../lib/ai-config";
 import { useAppStore } from "../store/useAppStore";
 import { StreakKind, STREAK_FREEZE_COST } from "../lib/rewards";
 
@@ -63,8 +64,6 @@ export default function ShopScreen() {
   const readStreakFreezesAvailable = useAppStore((state) => state.readStreakFreezesAvailable);
   const memoryStreakFreezesAvailable = useAppStore((state) => state.memoryStreakFreezesAvailable);
   const purchaseStreakFreeze = useAppStore((state) => state.purchaseStreakFreeze);
-  const aiFreeDailyAllowance = useAppStore((state) => state.aiFreeDailyAllowance);
-  const aiEarnedTokenMonthlyCap = useAppStore((state) => state.aiEarnedTokenMonthlyCap);
 
   const [toast, setToast] = useState<string | null>(null);
 
@@ -150,9 +149,8 @@ export default function ShopScreen() {
         </Text>
         <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-5 py-4 mb-4">
           <Text className="text-sm text-gray-700 dark:text-gray-200 leading-5">
-            You get {aiFreeDailyAllowance} free questions every day. Earned tokens can unlock up
-            to {aiEarnedTokenMonthlyCap} extra questions a month — beyond that, token packs and
-            Supporter status (coming soon) keep the lights on.
+            Ask AI is free: you get {AI_DAILY_QUESTION_LIMIT} questions every day, and the count
+            resets each morning. Tokens are never spent on questions. Save them for streak freezes.
           </Text>
         </View>
 
