@@ -4,7 +4,8 @@ export default function ReadStackLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="[chapter]" />
+      <Stack.Screen name="[book]/index" />
+      <Stack.Screen name="[book]/[chapter]" />
     </Stack>
   );
 }
