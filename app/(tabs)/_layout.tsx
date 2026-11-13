@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useColorScheme } from "react-native";
+import { Platform, useColorScheme } from "react-native";
 
 const COLORS = {
   active: "#4A6FA5", // soft blue
@@ -21,9 +21,10 @@ export default function TabLayout() {
           backgroundColor: isDark ? "#111827" : "#FFFFFF",
           borderTopColor: isDark ? "#1F2937" : "#E5E7EB",
           borderTopWidth: 1,
-          height: 84,
+          // Phones need room for the home indicator. On the web a fixed height squeezed the
+          // labels until they were cut off, so there the bar sizes itself.
+          ...(Platform.OS === "web" ? { height: 72, paddingBottom: 10 } : { height: 84, paddingBottom: 28 }),
           paddingTop: 8,
-          paddingBottom: 28,
         },
         tabBarLabelStyle: {
           fontSize: 12,

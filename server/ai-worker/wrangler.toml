@@ -1,0 +1,19 @@
+# Cloudflare Worker for DeepWord's study companion. See README.md for setup.
+name = "deepword-ai"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Browser sites allowed to call this endpoint (comma-separated). The phone apps don't need to be listed.
+ALLOWED_ORIGINS = "https://jdgarc7612.github.io,http://localhost:8081"
+
+# At most 10 questions per minute from one visitor. Any number works as namespace_id;
+# it only needs to be unique within your Cloudflare account.
+[[ratelimits]]
+name = "AI_LIMITER"
+namespace_id = "4310"
+simple = { limit = 10, period = 60 }
+
+# The API key is a secret, never stored in this file:
+#   npx wrangler secret put ANTHROPIC_API_KEY

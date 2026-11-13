@@ -1,11 +1,14 @@
 import { Link } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { AppState, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAppStore } from "../../store/useAppStore";
-import { verseOfTheDay } from "../../constants/mock-data";
 import { serifFont } from "../../constants/fonts";
+import { chapterTitle, getBook } from "../../lib/bible";
+import { localDateString } from "../../lib/date";
+import { getVerseOfTheDay } from "../../lib/verse-of-the-day";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -18,6 +21,20 @@ export default function HomeScreen() {
   const tokenBalance = useAppStore((state) => state.tokenBalance);
   const currentReadStreak = useAppStore((state) => state.currentReadStreak);
   const currentMemoryStreak = useAppStore((state) => state.currentMemoryStreak);
+  const translation = useAppStore((state) => state.translation);
+  const lastRead = useAppStore((state) => state.lastRead);
+  const lastReadBook = lastRead ? getBook(lastRead.book) : undefined;
+
+  // Re-check the date when the app comes back to the foreground, so the verse
+  // turns over at midnight even if the app was left open.
+  const [dateKey, setDateKey] = useState(localDateString());
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (status) => {
+      if (status === "active") setDateKey(localDateString());
+    });
+    return () => sub.remove();
+  }, []);
+  const verseOfTheDay = getVerseOfTheDay(new Date(`${dateKey}T12:00:00`));
 
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
@@ -40,7 +57,10 @@ export default function HomeScreen() {
         </Text>
 
         <Link
-          href={{ pathname: "/read/[chapter]", params: { chapter: String(verseOfTheDay.chapter) } }}
+          href={{
+            pathname: "/read/[book]/[chapter]",
+            params: { book: verseOfTheDay.book, chapter: String(verseOfTheDay.chapter) },
+          }}
           asChild
         >
           <Pressable
@@ -58,11 +78,11 @@ export default function HomeScreen() {
               style={{ fontFamily: serifFont }}
               className="text-xl leading-8 text-gray-900 dark:text-gray-100 mb-4"
             >
-              “{verseOfTheDay.text}”
+              “{verseOfTheDay.text[translation]}”
             </Text>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300">
-                {verseOfTheDay.reference} · {verseOfTheDay.translation}
+                {verseOfTheDay.reference} · {translation}
               </Text>
               <Ionicons name="arrow-forward" size={18} color="#4A6FA5" />
             </View>
@@ -114,6 +134,35 @@ export default function HomeScreen() {
         </Text>
 
         <View style={{ gap: 10 }}>
+          <Link
+            href={
+              lastRead && lastReadBook
+                ? {
+                    pathname: "/read/[book]/[chapter]",
+                    params: { book: lastRead.book, chapter: String(lastRead.chapter) },
+                  }
+                : "/read"
+            }
+            asChild
+          >
+            <Pressable className="flex-row items-center rounded-2xl border border-gray-100 dark:border-gray-800 px-5 py-4 active:opacity-70">
+              <View className="w-10 h-10 rounded-full bg-brand-blue/10 items-center justify-center mr-4">
+                <Ionicons name="book" size={18} color="#4A6FA5" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 dark:text-white">
+                  {lastRead && lastReadBook ? "Continue reading" : "Open the Bible"}
+                </Text>
+                <Text className="text-sm text-gray-400 dark:text-gray-500">
+                  {lastRead && lastReadBook
+                    ? chapterTitle(lastReadBook.name, lastRead.chapter)
+                    : "All 66 books, in three translations"}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+            </Pressable>
+          </Link>
+
           <Link href="/ai" asChild>
             <Pressable className="flex-row items-center rounded-2xl border border-gray-100 dark:border-gray-800 px-5 py-4 active:opacity-70">
               <View className="w-10 h-10 rounded-full bg-brand-blue/10 items-center justify-center mr-4">
