@@ -1,0 +1,530 @@
+[
+ {
+  "id": "genesis",
+  "name": "Genesis",
+  "short": "Gen",
+  "usfm": "GEN",
+  "testament": "OT",
+  "chapters": 50
+ },
+ {
+  "id": "exodus",
+  "name": "Exodus",
+  "short": "Exod",
+  "usfm": "EXO",
+  "testament": "OT",
+  "chapters": 40
+ },
+ {
+  "id": "leviticus",
+  "name": "Leviticus",
+  "short": "Lev",
+  "usfm": "LEV",
+  "testament": "OT",
+  "chapters": 27
+ },
+ {
+  "id": "numbers",
+  "name": "Numbers",
+  "short": "Num",
+  "usfm": "NUM",
+  "testament": "OT",
+  "chapters": 36
+ },
+ {
+  "id": "deuteronomy",
+  "name": "Deuteronomy",
+  "short": "Deut",
+  "usfm": "DEU",
+  "testament": "OT",
+  "chapters": 34
+ },
+ {
+  "id": "joshua",
+  "name": "Joshua",
+  "short": "Josh",
+  "usfm": "JOS",
+  "testament": "OT",
+  "chapters": 24
+ },
+ {
+  "id": "judges",
+  "name": "Judges",
+  "short": "Judg",
+  "usfm": "JDG",
+  "testament": "OT",
+  "chapters": 21
+ },
+ {
+  "id": "ruth",
+  "name": "Ruth",
+  "short": "Ruth",
+  "usfm": "RUT",
+  "testament": "OT",
+  "chapters": 4
+ },
+ {
+  "id": "1samuel",
+  "name": "1 Samuel",
+  "short": "1 Sam",
+  "usfm": "1SA",
+  "testament": "OT",
+  "chapters": 31
+ },
+ {
+  "id": "2samuel",
+  "name": "2 Samuel",
+  "short": "2 Sam",
+  "usfm": "2SA",
+  "testament": "OT",
+  "chapters": 24
+ },
+ {
+  "id": "1kings",
+  "name": "1 Kings",
+  "short": "1 Kgs",
+  "usfm": "1KI",
+  "testament": "OT",
+  "chapters": 22
+ },
+ {
+  "id": "2kings",
+  "name": "2 Kings",
+  "short": "2 Kgs",
+  "usfm": "2KI",
+  "testament": "OT",
+  "chapters": 25
+ },
+ {
+  "id": "1chronicles",
+  "name": "1 Chronicles",
+  "short": "1 Chr",
+  "usfm": "1CH",
+  "testament": "OT",
+  "chapters": 29
+ },
+ {
+  "id": "2chronicles",
+  "name": "2 Chronicles",
+  "short": "2 Chr",
+  "usfm": "2CH",
+  "testament": "OT",
+  "chapters": 36
+ },
+ {
+  "id": "ezra",
+  "name": "Ezra",
+  "short": "Ezra",
+  "usfm": "EZR",
+  "testament": "OT",
+  "chapters": 10
+ },
+ {
+  "id": "nehemiah",
+  "name": "Nehemiah",
+  "short": "Neh",
+  "usfm": "NEH",
+  "testament": "OT",
+  "chapters": 13
+ },
+ {
+  "id": "esther",
+  "name": "Esther",
+  "short": "Esth",
+  "usfm": "EST",
+  "testament": "OT",
+  "chapters": 10
+ },
+ {
+  "id": "job",
+  "name": "Job",
+  "short": "Job",
+  "usfm": "JOB",
+  "testament": "OT",
+  "chapters": 42
+ },
+ {
+  "id": "psalms",
+  "name": "Psalms",
+  "short": "Ps",
+  "usfm": "PSA",
+  "testament": "OT",
+  "chapters": 150
+ },
+ {
+  "id": "proverbs",
+  "name": "Proverbs",
+  "short": "Prov",
+  "usfm": "PRO",
+  "testament": "OT",
+  "chapters": 31
+ },
+ {
+  "id": "ecclesiastes",
+  "name": "Ecclesiastes",
+  "short": "Eccl",
+  "usfm": "ECC",
+  "testament": "OT",
+  "chapters": 12
+ },
+ {
+  "id": "songofsongs",
+  "name": "Song of Songs",
+  "short": "Song",
+  "usfm": "SNG",
+  "testament": "OT",
+  "chapters": 8
+ },
+ {
+  "id": "isaiah",
+  "name": "Isaiah",
+  "short": "Isa",
+  "usfm": "ISA",
+  "testament": "OT",
+  "chapters": 66
+ },
+ {
+  "id": "jeremiah",
+  "name": "Jeremiah",
+  "short": "Jer",
+  "usfm": "JER",
+  "testament": "OT",
+  "chapters": 52
+ },
+ {
+  "id": "lamentations",
+  "name": "Lamentations",
+  "short": "Lam",
+  "usfm": "LAM",
+  "testament": "OT",
+  "chapters": 5
+ },
+ {
+  "id": "ezekiel",
+  "name": "Ezekiel",
+  "short": "Ezek",
+  "usfm": "EZK",
+  "testament": "OT",
+  "chapters": 48
+ },
+ {
+  "id": "daniel",
+  "name": "Daniel",
+  "short": "Dan",
+  "usfm": "DAN",
+  "testament": "OT",
+  "chapters": 12
+ },
+ {
+  "id": "hosea",
+  "name": "Hosea",
+  "short": "Hos",
+  "usfm": "HOS",
+  "testament": "OT",
+  "chapters": 14
+ },
+ {
+  "id": "joel",
+  "name": "Joel",
+  "short": "Joel",
+  "usfm": "JOL",
+  "testament": "OT",
+  "chapters": 3
+ },
+ {
+  "id": "amos",
+  "name": "Amos",
+  "short": "Amos",
+  "usfm": "AMO",
+  "testament": "OT",
+  "chapters": 9
+ },
+ {
+  "id": "obadiah",
+  "name": "Obadiah",
+  "short": "Obad",
+  "usfm": "OBA",
+  "testament": "OT",
+  "chapters": 1
+ },
+ {
+  "id": "jonah",
+  "name": "Jonah",
+  "short": "Jonah",
+  "usfm": "JON",
+  "testament": "OT",
+  "chapters": 4
+ },
+ {
+  "id": "micah",
+  "name": "Micah",
+  "short": "Mic",
+  "usfm": "MIC",
+  "testament": "OT",
+  "chapters": 7
+ },
+ {
+  "id": "nahum",
+  "name": "Nahum",
+  "short": "Nah",
+  "usfm": "NAM",
+  "testament": "OT",
+  "chapters": 3
+ },
+ {
+  "id": "habakkuk",
+  "name": "Habakkuk",
+  "short": "Hab",
+  "usfm": "HAB",
+  "testament": "OT",
+  "chapters": 3
+ },
+ {
+  "id": "zephaniah",
+  "name": "Zephaniah",
+  "short": "Zeph",
+  "usfm": "ZEP",
+  "testament": "OT",
+  "chapters": 3
+ },
+ {
+  "id": "haggai",
+  "name": "Haggai",
+  "short": "Hag",
+  "usfm": "HAG",
+  "testament": "OT",
+  "chapters": 2
+ },
+ {
+  "id": "zechariah",
+  "name": "Zechariah",
+  "short": "Zech",
+  "usfm": "ZEC",
+  "testament": "OT",
+  "chapters": 14
+ },
+ {
+  "id": "malachi",
+  "name": "Malachi",
+  "short": "Mal",
+  "usfm": "MAL",
+  "testament": "OT",
+  "chapters": 4
+ },
+ {
+  "id": "matthew",
+  "name": "Matthew",
+  "short": "Matt",
+  "usfm": "MAT",
+  "testament": "NT",
+  "chapters": 28
+ },
+ {
+  "id": "mark",
+  "name": "Mark",
+  "short": "Mark",
+  "usfm": "MRK",
+  "testament": "NT",
+  "chapters": 16
+ },
+ {
+  "id": "luke",
+  "name": "Luke",
+  "short": "Luke",
+  "usfm": "LUK",
+  "testament": "NT",
+  "chapters": 24
+ },
+ {
+  "id": "john",
+  "name": "John",
+  "short": "John",
+  "usfm": "JHN",
+  "testament": "NT",
+  "chapters": 21
+ },
+ {
+  "id": "acts",
+  "name": "Acts",
+  "short": "Acts",
+  "usfm": "ACT",
+  "testament": "NT",
+  "chapters": 28
+ },
+ {
+  "id": "romans",
+  "name": "Romans",
+  "short": "Rom",
+  "usfm": "ROM",
+  "testament": "NT",
+  "chapters": 16
+ },
+ {
+  "id": "1corinthians",
+  "name": "1 Corinthians",
+  "short": "1 Cor",
+  "usfm": "1CO",
+  "testament": "NT",
+  "chapters": 16
+ },
+ {
+  "id": "2corinthians",
+  "name": "2 Corinthians",
+  "short": "2 Cor",
+  "usfm": "2CO",
+  "testament": "NT",
+  "chapters": 13
+ },
+ {
+  "id": "galatians",
+  "name": "Galatians",
+  "short": "Gal",
+  "usfm": "GAL",
+  "testament": "NT",
+  "chapters": 6
+ },
+ {
+  "id": "ephesians",
+  "name": "Ephesians",
+  "short": "Eph",
+  "usfm": "EPH",
+  "testament": "NT",
+  "chapters": 6
+ },
+ {
+  "id": "philippians",
+  "name": "Philippians",
+  "short": "Phil",
+  "usfm": "PHP",
+  "testament": "NT",
+  "chapters": 4
+ },
+ {
+  "id": "colossians",
+  "name": "Colossians",
+  "short": "Col",
+  "usfm": "COL",
+  "testament": "NT",
+  "chapters": 4
+ },
+ {
+  "id": "1thessalonians",
+  "name": "1 Thessalonians",
+  "short": "1 Thess",
+  "usfm": "1TH",
+  "testament": "NT",
+  "chapters": 5
+ },
+ {
+  "id": "2thessalonians",
+  "name": "2 Thessalonians",
+  "short": "2 Thess",
+  "usfm": "2TH",
+  "testament": "NT",
+  "chapters": 3
+ },
+ {
+  "id": "1timothy",
+  "name": "1 Timothy",
+  "short": "1 Tim",
+  "usfm": "1TI",
+  "testament": "NT",
+  "chapters": 6
+ },
+ {
+  "id": "2timothy",
+  "name": "2 Timothy",
+  "short": "2 Tim",
+  "usfm": "2TI",
+  "testament": "NT",
+  "chapters": 4
+ },
+ {
+  "id": "titus",
+  "name": "Titus",
+  "short": "Titus",
+  "usfm": "TIT",
+  "testament": "NT",
+  "chapters": 3
+ },
+ {
+  "id": "philemon",
+  "name": "Philemon",
+  "short": "Phlm",
+  "usfm": "PHM",
+  "testament": "NT",
+  "chapters": 1
+ },
+ {
+  "id": "hebrews",
+  "name": "Hebrews",
+  "short": "Heb",
+  "usfm": "HEB",
+  "testament": "NT",
+  "chapters": 13
+ },
+ {
+  "id": "james",
+  "name": "James",
+  "short": "Jas",
+  "usfm": "JAS",
+  "testament": "NT",
+  "chapters": 5
+ },
+ {
+  "id": "1peter",
+  "name": "1 Peter",
+  "short": "1 Pet",
+  "usfm": "1PE",
+  "testament": "NT",
+  "chapters": 5
+ },
+ {
+  "id": "2peter",
+  "name": "2 Peter",
+  "short": "2 Pet",
+  "usfm": "2PE",
+  "testament": "NT",
+  "chapters": 3
+ },
+ {
+  "id": "1john",
+  "name": "1 John",
+  "short": "1 John",
+  "usfm": "1JN",
+  "testament": "NT",
+  "chapters": 5
+ },
+ {
+  "id": "2john",
+  "name": "2 John",
+  "short": "2 John",
+  "usfm": "2JN",
+  "testament": "NT",
+  "chapters": 1
+ },
+ {
+  "id": "3john",
+  "name": "3 John",
+  "short": "3 John",
+  "usfm": "3JN",
+  "testament": "NT",
+  "chapters": 1
+ },
+ {
+  "id": "jude",
+  "name": "Jude",
+  "short": "Jude",
+  "usfm": "JUD",
+  "testament": "NT",
+  "chapters": 1
+ },
+ {
+  "id": "revelation",
+  "name": "Revelation",
+  "short": "Rev",
+  "usfm": "REV",
+  "testament": "NT",
+  "chapters": 22
+ }
+]
