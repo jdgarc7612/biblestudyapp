@@ -48,8 +48,9 @@ environment (or in a local `.env` file) before building.
   web app moves.
 - Each visitor can ask at most 10 questions a minute (`[[ratelimits]]` in `wrangler.toml`).
 - Questions, passages and chat history are size-limited before anything reaches Claude.
-- The app itself allows 5 questions a day per device. That limit lives on the device, so it
-  guides normal use; the spend limit in the Anthropic Console is the real ceiling.
+- Signed-in readers get 5 free questions a day per account, counted in Supabase, so
+  reinstalling doesn't reset them (see `docs/accounts-setup.md`). Guests get 5 a day per
+  device, counted on the device. The spend limit in the Anthropic Console is the real ceiling.
 
 ## Changing how it answers
 
