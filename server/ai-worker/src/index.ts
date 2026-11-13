@@ -2,13 +2,16 @@
  * DeepWord study companion endpoint.
  *
  * POST /ask  { question, verse?: { reference, text }, translation?, history?: [{ role, content }] }
- *   -> 200 { answer }
- *   -> 4xx/5xx { error }
+ *   Optional headers for signed-in readers: Authorization: Bearer <Supabase access token>,
+ *   X-Timezone: <IANA zone, for when "today" starts>.
+ *   -> 200 { answer, remaining? }   (remaining: free questions left today, for signed-in readers)
+ *   -> 4xx/5xx { error, code? }     (code "daily_limit" when today's free questions are used up)
  *
  * The Anthropic API key lives only here, as the ANTHROPIC_API_KEY secret.
  */
 import Anthropic from "@anthropic-ai/sdk";
 
+import { AccountQuota, accountDay, makeAccountQuota } from "./quota";
 import { SYSTEM_PROMPT } from "./prompt";
 
 export interface Env {
@@ -19,6 +22,11 @@ export interface Env {
   MODEL?: string;
   /** Per-visitor request limiter (see wrangler.toml). Optional so local tests can run without it. */
   AI_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
+  /** Supabase project, for counting signed-in readers' free questions per account. */
+  SUPABASE_URL?: string;
+  SUPABASE_KEY?: string;
+  /** Free questions per account per day (default 5, matching the app). */
+  AI_DAILY_LIMIT?: string;
 }
 
 const DEFAULT_MODEL = "claude-haiku-5-5";
@@ -106,7 +114,7 @@ function corsHeaders(request: Request, env: Env): Record<string, string> {
     .filter(Boolean);
   const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Timezone",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
@@ -158,6 +166,34 @@ export default {
       return json({ error: message }, 400, cors);
     }
 
+    // Signed-in readers: today's free questions are counted on their account, not the device.
+    let quota: AccountQuota | null = null;
+    let used = 0;
+    const limit = Math.max(1, Number(env.AI_DAILY_LIMIT) || 5);
+    const token = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (token && env.SUPABASE_URL && env.SUPABASE_KEY) {
+      quota = makeAccountQuota(env.SUPABASE_URL, env.SUPABASE_KEY, token, accountDay(request.headers.get("X-Timezone")));
+      const check = await quota.used();
+      if (check === "signed_out") {
+        return json({ error: "Please sign in again to keep asking.", code: "signed_out" }, 401, cors);
+      }
+      if (check === "unavailable") {
+        return json({ error: "Something went wrong. Please try again." }, 503, cors);
+      }
+      used = check;
+      if (used >= limit) {
+        return json(
+          {
+            error: `That's all ${limit} of today's questions. You get ${limit} more tomorrow.`,
+            code: "daily_limit",
+            remaining: 0,
+          },
+          429,
+          cors
+        );
+      }
+    }
+
     const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2, timeout: 60_000 });
     try {
       const response = await client.messages.create({
@@ -184,6 +220,12 @@ export default {
         .join("\n\n")
         .trim();
       if (!answer) return json({ error: "No answer came back. Please try again." }, 502, cors);
+      if (quota) {
+        // Counted only once an answer comes back, so a failed request never costs a question.
+        const count = await quota.record();
+        const remaining = Math.max(0, limit - (typeof count === "number" ? count : used + 1));
+        return json({ answer, remaining }, 200, cors);
+      }
       return json({ answer }, 200, cors);
     } catch (err) {
       if (err instanceof Anthropic.RateLimitError) {

@@ -51,6 +51,7 @@ export default function AskAIScreen() {
   const chatMessages = useAppStore((state) => state.chatMessages);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
   const recordAiQuestionAsked = useAppStore((state) => state.recordAiQuestionAsked);
+  const setAiQuestionsUsedToday = useAppStore((state) => state.setAiQuestionsUsedToday);
   const claimOnboardingBonus = useAppStore((state) => state.claimOnboardingBonus);
   const aiFreeQuestionsAskedToday = useAppStore((state) => state.aiFreeQuestionsAskedToday);
   const aiFreeQuestionsAskedTodayDate = useAppStore((state) => state.aiFreeQuestionsAskedTodayDate);
@@ -107,9 +108,15 @@ export default function AskAIScreen() {
         content: result.answer,
         createdAt: new Date().toISOString(),
       });
-      recordAiQuestionAsked();
+      // Signed in: the account's count is the one that matters, wherever else it was used today.
+      if (result.remaining !== undefined) {
+        setAiQuestionsUsedToday(Math.max(0, AI_DAILY_QUESTION_LIMIT - result.remaining));
+      } else {
+        recordAiQuestionAsked();
+      }
       claimOnboardingBonus("firstAiQuestion");
     } else {
+      if (result.limitReached) setAiQuestionsUsedToday(AI_DAILY_QUESTION_LIMIT);
       setFailed({ message: result.message, question, context });
     }
     setIsThinking(false);
