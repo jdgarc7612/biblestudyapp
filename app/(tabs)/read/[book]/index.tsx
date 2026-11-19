@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BookOverview } from "../../../../components/read/book-overview";
 import { ChapterGrid } from "../../../../components/read/chapter-grid";
 import { TranslationPill } from "../../../../components/read/translation-picker";
 import { serifFont } from "../../../../constants/fonts";
@@ -52,6 +53,7 @@ export default function BookScreen() {
         <Text style={{ fontFamily: serifFont }} className="text-4xl text-gray-900 dark:text-white mt-1 mb-6">
           {book.name}
         </Text>
+        <BookOverview book={book} />
         <ChapterGrid book={book} current={lastRead?.book === book.id ? lastRead.chapter : undefined} />
       </ScrollView>
     </SafeAreaView>
