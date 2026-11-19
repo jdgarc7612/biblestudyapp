@@ -64,6 +64,23 @@ export interface StudyLocation {
   end: number;
 }
 
+/** Progress through one guided study: which days are done, and the local date each was marked. */
+export interface PlanProgress {
+  startedOn: string;
+  done: Record<number, string>;
+  updatedAt: number;
+}
+
+/**
+ * An answer to a guided study's reflection question. Empty text marks a deleted answer.
+ * Answers are private today; visibility is stored per answer so sharing can be added later.
+ */
+export interface PlanAnswer {
+  text: string;
+  updatedAt: number;
+  visibility: "private";
+}
+
 export interface ReadingLocation {
   book: string;
   chapter: number;
@@ -85,6 +102,12 @@ interface AppState {
   // Study notes, keyed by verse range id ("john-3-16-17").
   verseNotes: Record<string, VerseNote>;
   lastStudy: StudyLocation | null;
+
+  // Guided studies (data/study/plans.ts): the plan Home follows, and progress per plan.
+  activePlanId: string | null;
+  planProgress: Record<string, PlanProgress>;
+  /** Keyed "planId/day/question" (day and question from 1), see lib/plans.ts. */
+  planAnswers: Record<string, PlanAnswer>;
 
   // Read streak
   currentReadStreak: number;
@@ -133,6 +156,16 @@ interface AppState {
   /** Saves (or, with empty text, deletes) the note on a verse range. */
   saveVerseNote: (id: string, reference: string, text: string) => void;
   setLastStudy: (location: StudyLocation) => void;
+  /** Makes a plan the active one, starting it fresh if it's new or already finished. */
+  startPlan: (id: string, totalDays: number) => void;
+  /** Starts a plan over from day 1. */
+  restartPlan: (id: string) => void;
+  /** Marks a day done (or not). Finishing the last day ends the plan. */
+  setPlanDayDone: (id: string, day: number, done: boolean, totalDays: number) => void;
+  /** Stops following the active plan on Home; its progress is kept. */
+  leavePlan: () => void;
+  /** Saves (or, with empty text, deletes) an answer to a reflection question. */
+  savePlanAnswer: (id: string, text: string) => void;
 
   logReadEngagement: () => void;
   logMemoryEngagement: () => void;
@@ -208,6 +241,10 @@ export const useAppStore = create<AppState>()(
 
       verseNotes: {},
       lastStudy: null,
+
+      activePlanId: null,
+      planProgress: {},
+      planAnswers: {},
 
       deletedCardIds: [],
       syncedUserId: null,
@@ -285,6 +322,56 @@ export const useAppStore = create<AppState>()(
       setLastRead: (location) => set({ lastRead: location }),
 
       setLastStudy: (location) => set({ lastStudy: location }),
+
+      startPlan: (id, totalDays) =>
+        set((state) => {
+          const existing = state.planProgress[id];
+          const finished = !!existing && Object.keys(existing.done).length >= totalDays;
+          if (existing && !finished) return { activePlanId: id };
+          return {
+            activePlanId: id,
+            planProgress: {
+              ...state.planProgress,
+              [id]: { startedOn: localDateString(), done: {}, updatedAt: Date.now() },
+            },
+          };
+        }),
+
+      restartPlan: (id) =>
+        set((state) => ({
+          activePlanId: id,
+          planProgress: {
+            ...state.planProgress,
+            [id]: { startedOn: localDateString(), done: {}, updatedAt: Date.now() },
+          },
+        })),
+
+      setPlanDayDone: (id, day, done, totalDays) =>
+        set((state) => {
+          const existing = state.planProgress[id] ?? { startedOn: localDateString(), done: {}, updatedAt: 0 };
+          const nextDone = { ...existing.done };
+          if (done) nextDone[day] = localDateString();
+          else delete nextDone[day];
+          const finished = Object.keys(nextDone).length >= totalDays;
+          return {
+            activePlanId: finished && state.activePlanId === id ? null : state.activePlanId,
+            planProgress: { ...state.planProgress, [id]: { ...existing, done: nextDone, updatedAt: Date.now() } },
+          };
+        }),
+
+      leavePlan: () => set({ activePlanId: null }),
+
+      savePlanAnswer: (id, text) =>
+        set((state) => {
+          const trimmed = text.trim();
+          if ((state.planAnswers[id]?.text ?? "") === trimmed) return state;
+          return {
+            planAnswers: {
+              ...state.planAnswers,
+              [id]: { text: trimmed, updatedAt: Date.now(), visibility: "private" },
+            },
+          };
+        }),
 
       saveVerseNote: (id, reference, text) =>
         set((state) => {

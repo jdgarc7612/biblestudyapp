@@ -6,6 +6,8 @@ export default function ReadStackLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="[book]/index" />
       <Stack.Screen name="[book]/[chapter]" />
+      <Stack.Screen name="plans/index" />
+      <Stack.Screen name="plans/[id]" />
     </Stack>
   );
 }

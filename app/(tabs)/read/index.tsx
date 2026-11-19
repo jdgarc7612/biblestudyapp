@@ -9,6 +9,7 @@ import { ChapterGrid } from "../../../components/read/chapter-grid";
 import { TranslationPill } from "../../../components/read/translation-picker";
 import { serifFont } from "../../../constants/fonts";
 import { BOOKS, chapterTitle, getBook, getTranslation } from "../../../lib/bible";
+import { getPlan, nextDay } from "../../../lib/plans";
 import { useAppStore } from "../../../store/useAppStore";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -21,6 +22,9 @@ export default function ReadScreen() {
   const translation = useAppStore((state) => state.translation);
   const lastRead = useAppStore((state) => state.lastRead);
   const lastBook = getBook(lastRead?.book);
+  const activePlan = getPlan(useAppStore((state) => state.activePlanId));
+  const activeProgress = useAppStore((state) => (activePlan ? state.planProgress[activePlan.id] : undefined));
+  const activeNext = activePlan ? nextDay(activePlan, activeProgress) : null;
 
   const [testament, setTestament] = useState<Testament>(lastBook?.testament ?? "NT");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -62,7 +66,7 @@ export default function ReadScreen() {
             }}
             asChild
           >
-            <Pressable className="flex-row items-center rounded-3xl bg-brand-blue/10 dark:bg-brand-blue/20 border border-brand-blue/20 px-5 py-5 mb-6 active:opacity-80">
+            <Pressable className="flex-row items-center rounded-3xl bg-brand-blue/10 dark:bg-brand-blue/20 border border-brand-blue/20 px-5 py-5 mb-3 active:opacity-80">
               <View className="w-11 h-11 rounded-full bg-brand-blue items-center justify-center mr-4">
                 <Ionicons name="book" size={18} color="#FFFFFF" />
               </View>
@@ -81,6 +85,25 @@ export default function ReadScreen() {
             </Pressable>
           </Link>
         )}
+
+        <Link href={activePlan ? { pathname: "/read/plans/[id]", params: { id: activePlan.id } } : "/read/plans"} asChild>
+          <Pressable className="flex-row items-center rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3.5 mb-6 active:opacity-70">
+            <View className="w-9 h-9 rounded-full bg-brand-earth/15 items-center justify-center mr-3">
+              <Ionicons name="map-outline" size={16} color="#C19A6B" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-[15px] font-semibold text-gray-900 dark:text-white">
+                {activePlan ? activePlan.title : "Guided studies"}
+              </Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {activePlan && activeNext
+                  ? `Day ${activeNext} of ${activePlan.days.length} · ${activePlan.days[activeNext - 1].title}`
+                  : "Short daily plans through John, Romans, the Psalms and more"}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </Pressable>
+        </Link>
 
         <View className="flex-row rounded-2xl bg-gray-100 dark:bg-gray-800 p-1 mb-4">
           {(["OT", "NT"] as const).map((t) => {

@@ -10,6 +10,7 @@ import { chapterTitle, formatReference, getBook, useChapter, verseRangeId } from
 import { useCrossReferences, useCrossReferenceText, type CrossReference } from "../../lib/cross-references";
 import { localDateString } from "../../lib/date";
 import { listNotes, notesCovering, type NoteEntry } from "../../lib/notes";
+import { finishedADayOn, getPlan, nextDay, readingsLabel } from "../../lib/plans";
 import { isDue } from "../../lib/srs";
 import { getVerseOfTheDay } from "../../lib/verse-of-the-day";
 import { useAppStore } from "../../store/useAppStore";
@@ -56,6 +57,8 @@ export default function HomeScreen() {
   const memoryDeck = useAppStore((s) => s.memoryDeck);
   const addToMemoryDeck = useAppStore((s) => s.addToMemoryDeck);
   const verseNotes = useAppStore((s) => s.verseNotes);
+  const activePlan = getPlan(useAppStore((s) => s.activePlanId));
+  const planProgress = useAppStore((s) => (activePlan ? s.planProgress[activePlan.id] : undefined));
 
   // Re-check the date when the app comes back to the foreground, so the verse
   // turns over at midnight even if the app was left open.
@@ -69,15 +72,31 @@ export default function HomeScreen() {
   const daily = getVerseOfTheDay(new Date(`${dateKey}T12:00:00`));
   const dailyPassage: Passage = { ...daily };
 
-  // Home follows the reader's own study once they have one; today's verse is the way in until then.
+  // Home follows a guided study first, then the reader's own study; today's verse is the way in until then.
+  const planDayNumber = activePlan ? nextDay(activePlan, planProgress) : null;
+  const planDay = activePlan && planDayNumber ? activePlan.days[planDayNumber - 1] : null;
+  const planDoneToday = finishedADayOn(planProgress, dateKey);
+  const planStudy: Passage | null = planDay
+    ? {
+        book: planDay.readings[0].book,
+        chapter: planDay.readings[0].chapter,
+        start: planDay.readings[0].start ?? 1,
+        // A whole chapter: every verse (the reader's text stops at the chapter's end).
+        end: planDay.readings[0].end ?? 999,
+        reference: readingsLabel(planDay.readings),
+      }
+    : null;
   const studyBook = lastStudy ? getBook(lastStudy.book) : undefined;
   const ownStudy: Passage | null =
-    lastStudy && studyBook
+    planStudy ??
+    (lastStudy && studyBook
       ? { ...lastStudy, reference: formatReference(studyBook.name, lastStudy.chapter, lastStudy.start, lastStudy.end) }
-      : null;
+      : null);
   const focus = ownStudy ?? dailyPassage;
   const ownText = usePassageText(ownStudy);
   const focusText = ownStudy ? ownText : daily.text[translation];
+  const openPlan = () =>
+    activePlan && router.push({ pathname: "/read/plans/[id]", params: { id: activePlan.id } });
   const sameAsDaily =
     !!ownStudy && ownStudy.book === daily.book && ownStudy.chapter === daily.chapter && ownStudy.start === daily.start;
 
@@ -137,14 +156,20 @@ export default function HomeScreen() {
         <View className="rounded-3xl bg-brand-blue/10 dark:bg-brand-blue/20 border border-brand-blue/20 px-5 pt-5 pb-4">
           <View className="flex-row items-center justify-between mb-3">
             <View className="flex-row items-center">
-              <Ionicons name={ownStudy ? "school" : "sunny"} size={14} color={EARTH} />
+              <Ionicons name={planDay ? "map" : ownStudy ? "school" : "sunny"} size={14} color={EARTH} />
               <Text className="text-xs font-semibold tracking-wide uppercase text-brand-earth ml-1.5">
-                {ownStudy ? "Your study" : "Today's verse"}
+                {planDay
+                  ? planDoneToday
+                    ? `Today's done · Day ${planDayNumber} next`
+                    : `Guided study · Day ${planDayNumber} of ${activePlan!.days.length}`
+                  : ownStudy
+                    ? "Your study"
+                    : "Today's verse"}
               </Text>
             </View>
             {focusNotes.length > 0 && (
               <Pressable
-                onPress={() => open(focus, "note")}
+                onPress={() => open(focusNotes[0], "note")}
                 className="flex-row items-center active:opacity-60"
                 hitSlop={8}
               >
@@ -156,23 +181,36 @@ export default function HomeScreen() {
             )}
           </View>
           <Text className="text-lg font-bold text-gray-900 dark:text-white mb-1.5">{focus.reference}</Text>
+          {planDay && (
+            <Pressable onPress={openPlan} className="-mt-1 mb-2 active:opacity-60" hitSlop={6}>
+              <Text className="text-sm text-gray-500 dark:text-gray-400">
+                {planDay.title} · {activePlan!.title}
+              </Text>
+            </Pressable>
+          )}
           <Text
             style={{ fontFamily: serifFont }}
             className="text-[17px] leading-7 text-gray-800 dark:text-gray-100 mb-4"
-            numberOfLines={expanded ? undefined : 3}
+            numberOfLines={expanded && !planDay ? undefined : 3}
           >
             {focusText ? `“${focusText}”` : " "}
           </Text>
 
           <View className="flex-row" style={{ gap: 8 }}>
             <Pressable
-              onPress={() => open(focus, "1")}
+              onPress={() => (planDay ? openPlan() : open(focus, "1"))}
               className="flex-1 flex-row items-center justify-center rounded-2xl py-3 active:opacity-80"
               style={{ backgroundColor: BLUE }}
             >
-              <Ionicons name="school-outline" size={16} color="#FFFFFF" />
+              <Ionicons name={planDay ? "book-outline" : "school-outline"} size={16} color="#FFFFFF" />
               <Text className="text-[15px] font-semibold text-white ml-2">
-                {ownStudy ? "Keep studying" : "Study this verse"}
+                {planDay
+                  ? planDoneToday
+                    ? `Read day ${planDayNumber}`
+                    : "Today's reading"
+                  : ownStudy
+                    ? "Keep studying"
+                    : "Study this verse"}
               </Text>
             </Pressable>
             <Pressable
@@ -188,13 +226,25 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          {expanded && <GoDeeper passage={focus} onOpen={open} onAsk={ask} />}
+          {expanded &&
+            (planDay ? (
+              <GoDeeper
+                passage={focus}
+                onOpen={open}
+                onAsk={(q) => router.push({ pathname: "/ai", params: { question: `About ${focus.reference}: ${q}` } })}
+                questions={planDay.questions}
+                questionsLabel="Reflect on today's reading"
+              />
+            ) : (
+              <GoDeeper passage={focus} onOpen={open} onAsk={ask} />
+            ))}
         </View>
 
         {/* Today's verse stays one tap away once Home is following your own study. */}
         {ownStudy && !sameAsDaily && (
           <Pressable
             onPress={() => open(dailyPassage, "1")}
+            accessibilityLabel={`Today's verse, ${daily.reference}`}
             className="flex-row items-center rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3.5 mt-3 active:opacity-70"
           >
             <View className="w-9 h-9 rounded-full bg-brand-earth/15 items-center justify-center mr-3">
@@ -216,11 +266,30 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
+        {/* Guided studies: one tap to browse plans until you're following one. */}
+        {!activePlan && (
+          <Pressable
+            onPress={() => router.push("/read/plans")}
+            className="flex-row items-center rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3.5 mt-3 active:opacity-70"
+          >
+            <View className="w-9 h-9 rounded-full bg-brand-blue/10 items-center justify-center mr-3">
+              <Ionicons name="map-outline" size={16} color={BLUE} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-[15px] font-semibold text-gray-900 dark:text-white">Start a guided study</Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                A few minutes a day through John, Romans, the Psalms and more
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </Pressable>
+        )}
+
         <PickUp
           lastRead={lastRead}
           dueCount={memoryDeck.filter((c) => isDue(c.dueDate)).length}
           deckSize={memoryDeck.length}
-          suggestion={focusText ? { reference: focus.reference, text: focusText } : null}
+          suggestion={focusText && !planDay ? { reference: focus.reference, text: focusText } : null}
           onRead={(book, chapter) =>
             router.push({ pathname: "/read/[book]/[chapter]", params: { book, chapter: String(chapter) } })
           }
@@ -481,15 +550,22 @@ function GoDeeper({
   passage,
   onOpen,
   onAsk,
+  questions: givenQuestions,
+  questionsLabel = "Questions to explore",
 }: {
   passage: Passage;
   onOpen: (p: { book: string; chapter: number; start: number; end?: number }, study?: Study) => void;
   onAsk: (question: string) => void;
+  /** A guided study's own questions, in place of the general ones. */
+  questions?: string[];
+  questionsLabel?: string;
 }) {
   const { refs } = useCrossReferences(passage.book, passage.chapter, passage.start, passage.end);
   const book = getBook(passage.book)!;
   const intro = getBookIntro(passage.book);
-  const questions = [
+  // A whole-chapter reading opens the study panel on its first verse.
+  const anchor = passage.end >= 999 ? { ...passage, end: passage.start } : passage;
+  const questions = givenQuestions ?? [
     `What did ${passage.reference} mean to its first readers?`,
     `How does ${passage.reference} point to Jesus?`,
     `How can I live out ${passage.reference} this week?`,
@@ -508,8 +584,8 @@ function GoDeeper({
                 onPress={() => onOpen({ book: r.book.id, chapter: r.chapter, start: r.verse, end: r.endChapter === r.chapter ? r.endVerse : undefined })}
               />
             ))}
-            {refs.length > 3 && (
-              <Pressable onPress={() => onOpen(passage, "1")} className="py-1 active:opacity-60">
+            {refs.length > 3 && passage.end < 999 && (
+              <Pressable onPress={() => onOpen(anchor, "1")} className="py-1 active:opacity-60">
                 <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300">
                   See all {refs.length} →
                 </Text>
@@ -519,7 +595,7 @@ function GoDeeper({
         </>
       )}
 
-      <DeeperLabel>Questions to explore</DeeperLabel>
+      <DeeperLabel>{questionsLabel}</DeeperLabel>
       <View style={{ gap: 6 }} className="mb-4">
         {questions.map((q) => (
           <Pressable
@@ -535,7 +611,7 @@ function GoDeeper({
 
       {intro && (
         <Pressable
-          onPress={() => onOpen(passage, "book")}
+          onPress={() => onOpen(anchor, "book")}
           className="flex-row items-center rounded-xl bg-white/70 dark:bg-gray-900/40 px-3 py-2.5 active:opacity-70"
         >
           <Ionicons name="library-outline" size={15} color={BLUE} />

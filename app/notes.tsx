@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { serifFont } from "../constants/fonts";
 import { BOOKS } from "../lib/bible";
 import { byPassage, listNotes, type NoteEntry } from "../lib/notes";
+import { listPlanAnswers, readingsLabel } from "../lib/plans";
 import { useAppStore } from "../store/useAppStore";
 
 const BLUE = "#4A6FA5";
@@ -16,19 +17,41 @@ function formatDate(ms: number) {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-/** Every study note in one place: newest first or in Bible order, with search. */
+/** A verse note, or an answer from a guided study (shown with its plan, day and question). */
+type Entry = NoteEntry & { answer?: { planId: string; day: number; label: string; question: string } };
+
+const BOOK_INDEX = new Map(BOOKS.map((b, i) => [b.id, i]));
+
+/** Every study note and guided-study answer in one place: newest first or in Bible order, with search. */
 export default function NotesScreen() {
   const router = useRouter();
   const verseNotes = useAppStore((s) => s.verseNotes);
+  const planAnswers = useAppStore((s) => s.planAnswers);
   const signedIn = useAppStore((s) => !!s.syncedUserId);
   const [query, setQuery] = useState("");
   const [order, setOrder] = useState<Order>("recent");
 
-  const all = useMemo(() => listNotes(verseNotes), [verseNotes]);
+  const all = useMemo<Entry[]>(() => {
+    const answers: Entry[] = listPlanAnswers(planAnswers).map((a) => ({
+      id: a.id,
+      text: a.text,
+      reference: readingsLabel(a.plan.days[a.day - 1].readings),
+      updatedAt: a.updatedAt,
+      book: a.reading.book,
+      chapter: a.reading.chapter,
+      start: a.reading.start ?? 1,
+      end: a.reading.end ?? a.reading.start ?? 1,
+      bookIndex: BOOK_INDEX.get(a.reading.book) ?? 0,
+      answer: { planId: a.plan.id, day: a.day, label: `${a.plan.title} · Day ${a.day}`, question: a.question },
+    }));
+    return [...listNotes(verseNotes), ...answers].sort((x, y) => y.updatedAt - x.updatedAt);
+  }, [verseNotes, planAnswers]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = q
-      ? all.filter((n) => n.text.toLowerCase().includes(q) || n.reference.toLowerCase().includes(q))
+      ? all.filter((n) =>
+          [n.text, n.reference, n.answer?.label ?? "", n.answer?.question ?? ""].some((t) => t.toLowerCase().includes(q))
+        )
       : all;
     return order === "bible" ? [...filtered].sort(byPassage) : filtered;
   }, [all, query, order]);
@@ -36,7 +59,7 @@ export default function NotesScreen() {
   // In Bible order, group under book names.
   const groups = useMemo(() => {
     if (order === "recent") return [{ title: null as string | null, notes: shown }];
-    const out: { title: string | null; notes: NoteEntry[] }[] = [];
+    const out: { title: string | null; notes: Entry[] }[] = [];
     for (const n of shown) {
       const title = BOOKS[n.bookIndex]?.name ?? n.book;
       const last = out[out.length - 1];
@@ -46,8 +69,10 @@ export default function NotesScreen() {
     return out;
   }, [shown, order]);
 
-  const open = (n: NoteEntry) =>
-    router.push({
+  const open = (n: Entry) =>
+    n.answer
+      ? router.push({ pathname: "/read/plans/[id]", params: { id: n.answer.planId, day: String(n.answer.day) } })
+      : router.push({
       pathname: "/read/[book]/[chapter]",
       params: {
         book: n.book,
@@ -84,8 +109,8 @@ export default function NotesScreen() {
             </View>
             <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No notes yet</Text>
             <Text className="text-sm text-center text-gray-500 dark:text-gray-400 leading-5 mb-6">
-              In the Reader, tap a verse, then Study, then Notes. Everything you write is kept here,
-              tied to its passage.
+              In the Reader, tap a verse, then Study, then Notes. Answers to guided study questions
+              show up here too, each tied to its passage.
             </Text>
             <Pressable
               onPress={() => router.push("/read")}
@@ -152,6 +177,17 @@ export default function NotesScreen() {
                         <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300">{n.reference}</Text>
                         <Text className="text-xs text-gray-400 dark:text-gray-500">{formatDate(n.updatedAt)}</Text>
                       </View>
+                      {n.answer && (
+                        <>
+                          <View className="flex-row items-center mb-1">
+                            <Ionicons name="map-outline" size={12} color="#C19A6B" />
+                            <Text className="text-xs font-semibold text-brand-earth ml-1">{n.answer.label}</Text>
+                          </View>
+                          <Text className="text-sm leading-5 text-gray-500 dark:text-gray-400 mb-1.5" numberOfLines={2}>
+                            {n.answer.question}
+                          </Text>
+                        </>
+                      )}
                       <Text
                         style={{ fontFamily: serifFont }}
                         className="text-[15px] leading-6 text-gray-800 dark:text-gray-200"
