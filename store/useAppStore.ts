@@ -71,6 +71,16 @@ export interface PlanProgress {
   updatedAt: number;
 }
 
+/**
+ * An answer to a guided study's reflection question. Empty text marks a deleted answer.
+ * Answers are private today; visibility is stored per answer so sharing can be added later.
+ */
+export interface PlanAnswer {
+  text: string;
+  updatedAt: number;
+  visibility: "private";
+}
+
 export interface ReadingLocation {
   book: string;
   chapter: number;
@@ -96,6 +106,8 @@ interface AppState {
   // Guided studies (data/study/plans.ts): the plan Home follows, and progress per plan.
   activePlanId: string | null;
   planProgress: Record<string, PlanProgress>;
+  /** Keyed "planId/day/question" (day and question from 1), see lib/plans.ts. */
+  planAnswers: Record<string, PlanAnswer>;
 
   // Read streak
   currentReadStreak: number;
@@ -152,6 +164,8 @@ interface AppState {
   setPlanDayDone: (id: string, day: number, done: boolean, totalDays: number) => void;
   /** Stops following the active plan on Home; its progress is kept. */
   leavePlan: () => void;
+  /** Saves (or, with empty text, deletes) an answer to a reflection question. */
+  savePlanAnswer: (id: string, text: string) => void;
 
   logReadEngagement: () => void;
   logMemoryEngagement: () => void;
@@ -230,6 +244,7 @@ export const useAppStore = create<AppState>()(
 
       activePlanId: null,
       planProgress: {},
+      planAnswers: {},
 
       deletedCardIds: [],
       syncedUserId: null,
@@ -345,6 +360,18 @@ export const useAppStore = create<AppState>()(
         }),
 
       leavePlan: () => set({ activePlanId: null }),
+
+      savePlanAnswer: (id, text) =>
+        set((state) => {
+          const trimmed = text.trim();
+          if ((state.planAnswers[id]?.text ?? "") === trimmed) return state;
+          return {
+            planAnswers: {
+              ...state.planAnswers,
+              [id]: { text: trimmed, updatedAt: Date.now(), visibility: "private" },
+            },
+          };
+        }),
 
       saveVerseNote: (id, reference, text) =>
         set((state) => {

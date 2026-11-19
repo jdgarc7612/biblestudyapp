@@ -10,7 +10,7 @@
  *   Removed cards are remembered so a sync never brings them back.
  * - Each streak comes from the copy that logged a day most recently; best streaks take the higher.
  * - Study notes are combined by verse; for a note on both, the more recently edited one wins.
- * - Guided study progress is combined by plan; for a plan on both, the more recently changed one wins.
+ * - Guided study progress is combined by plan, and answers by question; the more recently changed copy wins.
  * - Badges and claimed bonuses are combined.
  * - Settings, name and tokens come from whichever copy changed last. The first time a device
  *   joins an account that already has data, the account's copy wins, so a guest's starter
@@ -41,6 +41,7 @@ export const SYNCED_KEYS = [
   "deletedCardIds",
   "verseNotes",
   "planProgress",
+  "planAnswers",
   "currentReadStreak",
   "longestReadStreak",
   "lastReadDate",
@@ -100,6 +101,12 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
     if (!plans[id] || progress.updatedAt > plans[id].updatedAt) plans[id] = progress;
   }
   merged.planProgress = plans;
+
+  const answers = { ...(remote.planAnswers ?? {}) };
+  for (const [id, answer] of Object.entries(local.planAnswers ?? {})) {
+    if (!answers[id] || answer.updatedAt > answers[id].updatedAt) answers[id] = answer;
+  }
+  merged.planAnswers = answers;
 
   const read = streakWinner(local, remote, "lastReadDate", "currentReadStreak");
   merged.currentReadStreak = read.currentReadStreak;

@@ -1,5 +1,5 @@
 import { STUDY_PLANS, type PlanDay, type PlanReading, type StudyPlan } from "../data/study/plans";
-import type { PlanProgress } from "../store/useAppStore";
+import type { PlanAnswer, PlanProgress } from "../store/useAppStore";
 import { chapterTitle, formatReference, getBook } from "./bible";
 
 export type { PlanDay, PlanReading, StudyPlan };
@@ -43,4 +43,35 @@ export function nextDay(plan: StudyPlan, progress: PlanProgress | undefined): nu
 /** True when a day of this plan was marked done on `today`. */
 export function finishedADayOn(progress: PlanProgress | undefined, today: string) {
   return !!progress && Object.values(progress.done).includes(today);
+}
+
+/** The key for an answer: "romans-7-days/3/1" (day and question count from 1). */
+export function planAnswerId(planId: string, day: number, question: number) {
+  return `${planId}/${day}/${question}`;
+}
+
+export interface PlanAnswerEntry {
+  id: string;
+  plan: StudyPlan;
+  day: number;
+  question: string;
+  text: string;
+  updatedAt: number;
+  /** The day's first reading, for sorting with verse notes in Bible order. */
+  reading: PlanReading;
+}
+
+/** Every answer with text, newest first. */
+export function listPlanAnswers(answers: Record<string, PlanAnswer>): PlanAnswerEntry[] {
+  const out: PlanAnswerEntry[] = [];
+  for (const [id, answer] of Object.entries(answers)) {
+    if (!answer.text) continue;
+    const [planId, dayStr, qStr] = id.split("/");
+    const plan = getPlan(planId);
+    const day = plan?.days[Number(dayStr) - 1];
+    const question = day?.questions[Number(qStr) - 1];
+    if (!plan || !day || !question) continue;
+    out.push({ id, plan, day: Number(dayStr), question, text: answer.text, updatedAt: answer.updatedAt, reading: day.readings[0] });
+  }
+  return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }

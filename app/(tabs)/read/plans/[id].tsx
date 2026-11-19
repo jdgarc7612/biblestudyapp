@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { LayoutAnimation, Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { LayoutAnimation, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -11,6 +11,7 @@ import {
   doneDays,
   getPlan,
   nextDay,
+  planAnswerId,
   readingLabel,
   readingsLabel,
   STUDY_PLANS,
@@ -29,7 +30,8 @@ export async function generateStaticParams(): Promise<{ id: string }[]> {
 /** One guided study: its days, today's reading and questions, and marking days done. */
 export default function PlanScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  /** `day` opens that day (from My notes). */
+  const { id, day: dayParam } = useLocalSearchParams<{ id: string; day?: string }>();
   const plan = getPlan(id);
   const activePlanId = useAppStore((s) => s.activePlanId);
   const progress = useAppStore((s) => (id ? s.planProgress[id] : undefined));
@@ -39,7 +41,7 @@ export default function PlanScreen() {
   const leavePlan = useAppStore((s) => s.leavePlan);
 
   const next = plan ? nextDay(plan, progress) : null;
-  const [openDay, setOpenDay] = useState<number | null>(next ?? 1);
+  const [openDay, setOpenDay] = useState<number | null>(dayParam ? Number(dayParam) : (next ?? 1));
 
   if (!plan) return <Redirect href="/read/plans" />;
 
@@ -99,7 +101,10 @@ export default function PlanScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 48 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 48 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <View className="flex-row items-center mb-3">
           <View className="w-10 h-10 rounded-full bg-brand-earth/15 items-center justify-center mr-3">
             <Ionicons name={plan.icon} size={18} color={EARTH} />
@@ -234,10 +239,14 @@ export default function PlanScreen() {
                     </View>
 
                     <DayLabel>Reflect</DayLabel>
+                    <Text className="text-xs text-gray-500 dark:text-gray-400 -mt-1 mb-2">
+                      Your answers are private and kept in My notes.
+                    </Text>
                     <View style={{ gap: 6 }} className="mb-4">
-                      {day.questions.map((q) => (
+                      {day.questions.map((q, qi) => (
                         <View key={q} className="rounded-xl bg-white/80 dark:bg-gray-900/40 px-3 py-3">
                           <Text className="text-[15px] leading-6 text-gray-800 dark:text-gray-100">{q}</Text>
+                          <AnswerBox id={planAnswerId(plan.id, n, qi + 1)} />
                           <Pressable
                             onPress={() => ask(label, q)}
                             hitSlop={6}
@@ -285,6 +294,42 @@ export default function PlanScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** A private answer to one question. Saves as you type; it also shows in My notes. */
+function AnswerBox({ id }: { id: string }) {
+  const saved = useAppStore((s) => s.planAnswers[id]?.text ?? "");
+  const savePlanAnswer = useAppStore((s) => s.savePlanAnswer);
+  const [text, setText] = useState(saved);
+  const [height, setHeight] = useState(44);
+  const latest = useRef(text);
+  latest.current = text;
+
+  // Save a moment after typing stops, and whatever is left when the day closes.
+  useEffect(() => {
+    if (text === saved) return;
+    const timer = setTimeout(() => savePlanAnswer(id, text), 600);
+    return () => clearTimeout(timer);
+  }, [id, text, saved, savePlanAnswer]);
+  useEffect(() => () => savePlanAnswer(id, latest.current), [id, savePlanAnswer]);
+
+  return (
+    <View className="flex-row items-start rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 mt-2.5">
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        onBlur={() => savePlanAnswer(id, text)}
+        placeholder="Write your answer"
+        placeholderTextColor="#9CA3AF"
+        multiline
+        onContentSizeChange={(e) => setHeight(e.nativeEvent.contentSize.height)}
+        style={{ fontFamily: serifFont, height: Math.max(44, height) }}
+        className="flex-1 py-2.5 text-[15px] leading-6 text-gray-900 dark:text-gray-100"
+        accessibilityLabel="Your answer, only you can see it"
+      />
+      <Ionicons name="lock-closed-outline" size={13} color="#9CA3AF" style={{ marginTop: 14, marginLeft: 6 }} />
+    </View>
   );
 }
 
