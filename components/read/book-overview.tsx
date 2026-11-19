@@ -49,6 +49,11 @@ export function BookOverview({ book }: { book: BookMeta }) {
           <Text style={{ fontFamily: serifFont }} className="text-[15px] leading-6 text-gray-800 dark:text-gray-100">
             {intro.theme}
           </Text>
+          {!open && (
+            <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300 mt-1">
+              Read full overview →
+            </Text>
+          )}
         </View>
         <Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color="#9CA3AF" style={{ marginTop: 2 }} />
       </Pressable>
