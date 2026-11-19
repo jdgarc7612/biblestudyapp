@@ -1,16 +1,15 @@
 import { Link, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { AppState, Pressable, ScrollView, Text, View } from "react-native";
+import { AppState, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { serifFont } from "../../constants/fonts";
 import { getBookIntro } from "../../data/study/book-intros";
-import { chapterTitle, formatReference, getBook, useChapter } from "../../lib/bible";
+import { formatReference, getBook, useChapter } from "../../lib/bible";
 import { useCrossReferences, useCrossReferenceText, type CrossReference } from "../../lib/cross-references";
 import { localDateString } from "../../lib/date";
-import { notesCovering } from "../../lib/notes";
-import { isDue } from "../../lib/srs";
+import { listNotes, notesCovering, type NoteEntry } from "../../lib/notes";
 import { getVerseOfTheDay } from "../../lib/verse-of-the-day";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -51,11 +50,8 @@ export default function HomeScreen() {
   const currentMemoryStreak = useAppStore((s) => s.currentMemoryStreak);
   const tokenBalance = useAppStore((s) => s.tokenBalance);
   const translation = useAppStore((s) => s.translation);
-  const lastRead = useAppStore((s) => s.lastRead);
   const lastStudy = useAppStore((s) => s.lastStudy);
   const verseNotes = useAppStore((s) => s.verseNotes);
-  const memoryDeck = useAppStore((s) => s.memoryDeck);
-  const lastReadBook = lastRead ? getBook(lastRead.book) : undefined;
 
   // Re-check the date when the app comes back to the foreground, so the verse
   // turns over at midnight even if the app was left open.
@@ -81,9 +77,8 @@ export default function HomeScreen() {
   const sameAsDaily =
     !!ownStudy && ownStudy.book === daily.book && ownStudy.chapter === daily.chapter && ownStudy.start === daily.start;
 
-  const noteCount = Object.values(verseNotes).filter((n) => n.text).length;
+  const allNotes = listNotes(verseNotes);
   const focusNotes = notesCovering(verseNotes, focus.book, focus.chapter, focus.start, focus.end);
-  const dueCount = memoryDeck.filter((c) => isDue(c.dueDate)).length;
 
   const [expanded, setExpanded] = useState(false);
 
@@ -131,6 +126,8 @@ export default function HomeScreen() {
             </Pressable>
           </Link>
         </View>
+
+        <AskBar onAsk={(q) => router.push({ pathname: "/ai", params: { question: q } })} />
 
         {/* The one big card: the passage you're studying (or today's verse), with more on request. */}
         <View className="rounded-3xl bg-brand-blue/10 dark:bg-brand-blue/20 border border-brand-blue/20 px-5 pt-5 pb-4">
@@ -215,37 +212,14 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        <View className="flex-row flex-wrap mt-5" style={{ gap: 10 }}>
-          <Tile
-            icon="book"
-            color={BLUE}
-            title={lastRead && lastReadBook ? "Continue" : "Read"}
-            detail={lastRead && lastReadBook ? chapterTitle(lastReadBook.name, lastRead.chapter) : "All 66 books"}
-            onPress={() =>
-              lastRead && lastReadBook
-                ? router.push({
-                    pathname: "/read/[book]/[chapter]",
-                    params: { book: lastRead.book, chapter: String(lastRead.chapter) },
-                  })
-                : router.push("/read")
-            }
+        {allNotes.length > 0 && (
+          <RecentNotes
+            notes={allNotes.slice(0, 2)}
+            total={allNotes.length}
+            onOpen={(n) => open(n, "note")}
+            onSeeAll={() => router.push("/notes")}
           />
-          <Tile icon="chatbubble-ellipses" color={BLUE} title="Ask" detail="Any question" onPress={() => router.push("/ai")} />
-          <Tile
-            icon="albums"
-            color={EARTH}
-            title="Memory"
-            detail={dueCount ? `${dueCount} due today` : memoryDeck.length ? "All caught up" : "Start a deck"}
-            onPress={() => router.push("/memory")}
-          />
-          <Tile
-            icon="create"
-            color={EARTH}
-            title="My notes"
-            detail={noteCount ? `${noteCount} saved` : "None yet"}
-            onPress={() => router.push("/notes")}
-          />
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -260,33 +234,110 @@ function Stat({ icon, color, value }: { icon: keyof typeof Ionicons.glyphMap; co
   );
 }
 
-function Tile({
-  icon,
-  color,
-  title,
-  detail,
-  onPress,
+const EXAMPLE_QUESTIONS = ["What is grace?", "Who wrote Hebrews?", "Why did Jesus speak in parables?"];
+
+/** Ask the study companion anything, straight from Home. */
+function AskBar({ onAsk }: { onAsk: (question: string) => void }) {
+  const [text, setText] = useState("");
+  const submit = (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setText("");
+    onAsk(trimmed);
+  };
+  return (
+    <View className="mb-4">
+      <View
+        className="flex-row items-center rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 pl-4 pr-1.5"
+        style={{ shadowColor: "#1F2937", shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 }}
+      >
+        <Ionicons name="sparkles" size={17} color={EARTH} />
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          onSubmitEditing={() => submit(text)}
+          placeholder="Ask anything about the Bible…"
+          placeholderTextColor="#9CA3AF"
+          returnKeyType="send"
+          accessibilityLabel="Ask a question about the Bible"
+          className="flex-1 py-3.5 ml-2.5 text-base text-gray-900 dark:text-gray-100"
+        />
+        <Pressable
+          onPress={() => submit(text)}
+          disabled={!text.trim()}
+          accessibilityLabel="Ask"
+          className="w-9 h-9 rounded-xl items-center justify-center active:opacity-80"
+          style={{ backgroundColor: text.trim() ? BLUE : "#E5E7EB" }}
+        >
+          <Ionicons name="arrow-up" size={18} color={text.trim() ? "#FFFFFF" : "#9CA3AF"} />
+        </Pressable>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="mt-2.5 -mx-5"
+        contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+      >
+        {EXAMPLE_QUESTIONS.map((q) => (
+          <Pressable
+            key={q}
+            onPress={() => submit(q)}
+            className="rounded-full bg-gray-50 dark:bg-gray-800 px-3.5 py-1.5 active:opacity-70"
+          >
+            <Text className="text-[13px] text-gray-600 dark:text-gray-300">{q}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+/** The latest notes, so what you've written stays close at hand. */
+function RecentNotes({
+  notes,
+  total,
+  onOpen,
+  onSeeAll,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  title: string;
-  detail: string;
-  onPress: () => void;
+  notes: NoteEntry[];
+  total: number;
+  onOpen: (n: NoteEntry) => void;
+  onSeeAll: () => void;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-4 active:opacity-70"
-      style={{ flexBasis: "47%", flexGrow: 1 }}
-    >
-      <View className="w-9 h-9 rounded-full items-center justify-center mb-3" style={{ backgroundColor: `${color}1F` }}>
-        <Ionicons name={icon} size={17} color={color} />
+    <View className="mt-6">
+      <View className="flex-row items-center justify-between mb-2.5">
+        <Text className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          Recent notes
+        </Text>
+        <Pressable onPress={onSeeAll} hitSlop={8} className="active:opacity-60">
+          <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300">
+            {total > notes.length ? `See all ${total}` : "My notes"} →
+          </Text>
+        </Pressable>
       </View>
-      <Text className="text-base font-semibold text-gray-900 dark:text-white">{title}</Text>
-      <Text className="text-sm text-gray-500 dark:text-gray-400 mt-0.5" numberOfLines={1}>
-        {detail}
-      </Text>
-    </Pressable>
+      <View style={{ gap: 8 }}>
+        {notes.map((n) => (
+          <Pressable
+            key={n.id}
+            onPress={() => onOpen(n)}
+            className="flex-row rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3 active:opacity-70"
+          >
+            <View className="w-1 rounded-full bg-brand-earth/60 mr-3" />
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300 mb-0.5">{n.reference}</Text>
+              <Text
+                style={{ fontFamily: serifFont }}
+                className="text-[15px] leading-6 text-gray-800 dark:text-gray-200"
+                numberOfLines={2}
+              >
+                {n.text}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 
