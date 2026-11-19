@@ -145,6 +145,14 @@ function ChapterReader({
   const [sheetOpen, setSheetOpen] = useState(openStudy);
 
   const verseNotes = useAppStore((state) => state.verseNotes);
+  const setLastStudy = useAppStore((state) => state.setLastStudy);
+  const studyStart = selection ? Math.min(selection.anchor, selection.focus) : null;
+  const studyEnd = selection ? Math.max(selection.anchor, selection.focus) : null;
+  useEffect(() => {
+    if (sheetOpen && studyStart !== null && studyEnd !== null) {
+      setLastStudy({ book: bookId, chapter: chapterNum, start: studyStart, end: studyEnd });
+    }
+  }, [sheetOpen, studyStart, studyEnd, bookId, chapterNum, setLastStudy]);
   const notedRanges = useMemo(
     () =>
       Object.entries(verseNotes)
@@ -251,6 +259,7 @@ function ChapterReader({
         chapter: String(target.chapter),
         v: String(target.verse),
         ...(target.endVerse && target.endVerse !== target.verse ? { e: String(target.endVerse) } : {}),
+        ...(target.study ? { study: target.study } : {}),
       },
     });
   };

@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { serifFont } from "../../constants/fonts";
 import { getBookIntro } from "../../data/study/book-intros";
 import { formatReference, getBook, type TranslationId } from "../../lib/bible";
+import { notesCovering } from "../../lib/notes";
 import {
   useCrossReferences,
   useCrossReferenceText,
@@ -34,6 +35,8 @@ export interface OpenTarget {
   chapter: number;
   verse: number;
   endVerse?: number;
+  /** Open the study panel there too: "1" (cross-references), "book" or "note". */
+  study?: "1" | "book" | "note";
 }
 
 interface Props {
@@ -61,7 +64,8 @@ export function StudyPanel(props: Props) {
   const [tab, setTab] = useState<StudyTab>(props.initialTab ?? "connections");
   const book = getBook(props.bookId)!;
   const intro = getBookIntro(props.bookId);
-  const hasNote = useAppStore((s) => !!s.verseNotes[props.noteId]?.text);
+  const verseNotes = useAppStore((s) => s.verseNotes);
+  const noteCount = notesCovering(verseNotes, props.bookId, props.chapter, props.start, props.end).length;
 
   useEffect(() => {
     if (props.visible) setTab(props.initialTab ?? "connections");
@@ -70,7 +74,7 @@ export function StudyPanel(props: Props) {
   const tabs: { id: StudyTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { id: "connections", label: "Cross-refs", icon: "git-network-outline" },
     { id: "book", label: `About ${book.short}`, icon: "library-outline" },
-    { id: "note", label: hasNote ? "My note ✓" : "My note", icon: "create-outline" },
+    { id: "note", label: noteCount ? `Notes · ${noteCount}` : "Notes", icon: "create-outline" },
   ];
 
   return (
@@ -177,7 +181,15 @@ export function StudyPanel(props: Props) {
                 />
               )}
               {tab === "note" && (
-                <NoteEditor noteId={props.noteId} reference={props.reference} />
+                <NoteEditor
+                  noteId={props.noteId}
+                  reference={props.reference}
+                  bookId={props.bookId}
+                  chapter={props.chapter}
+                  start={props.start}
+                  end={props.end}
+                  onOpen={props.onOpen}
+                />
               )}
             </ScrollView>
           </Pressable>
@@ -284,7 +296,7 @@ function CrossReferences(props: {
   );
 }
 
-export function CrossReferenceRow({
+function CrossReferenceRow({
   reference,
   translation,
   onOpen,
@@ -403,7 +415,25 @@ function BookIntroView({
   );
 }
 
-function NoteEditor({ noteId, reference }: { noteId: string; reference: string }) {
+function NoteEditor({
+  noteId,
+  reference,
+  bookId,
+  chapter,
+  start,
+  end,
+  onOpen,
+}: {
+  noteId: string;
+  reference: string;
+  bookId: string;
+  chapter: number;
+  start: number;
+  end: number;
+  onOpen: (t: OpenTarget) => void;
+}) {
+  const verseNotes = useAppStore((s) => s.verseNotes);
+  const others = notesCovering(verseNotes, bookId, chapter, start, end).filter((n) => n.id !== noteId);
   const saved = useAppStore((s) => s.verseNotes[noteId]?.text ?? "");
   const saveVerseNote = useAppStore((s) => s.saveVerseNote);
   const signedIn = useAppStore((s) => !!s.syncedUserId);
@@ -450,6 +480,29 @@ function NoteEditor({ noteId, reference }: { noteId: string; reference: string }
           </Text>
         </Pressable>
       </View>
+      {others.length > 0 && (
+        <View className="mt-6">
+          <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">
+            Your other notes on these verses
+          </Text>
+          <View style={{ gap: 8 }}>
+            {others.map((n) => (
+              <Pressable
+                key={n.id}
+                onPress={() =>
+                  onOpen({ bookId: n.book, chapter: n.chapter, verse: n.start, endVerse: n.end, study: "note" })
+                }
+                className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3 active:opacity-70"
+              >
+                <Text className="text-xs font-semibold text-brand-blue dark:text-blue-300 mb-1">{n.reference}</Text>
+                <Text className="text-sm leading-5 text-gray-700 dark:text-gray-300" numberOfLines={3}>
+                  {n.text}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 }

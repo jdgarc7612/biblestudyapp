@@ -56,6 +56,14 @@ export interface VerseNote {
   updatedAt: number;
 }
 
+/** The passage someone last opened the study panel on; Home picks their study back up here. */
+export interface StudyLocation {
+  book: string;
+  chapter: number;
+  start: number;
+  end: number;
+}
+
 export interface ReadingLocation {
   book: string;
   chapter: number;
@@ -76,6 +84,7 @@ interface AppState {
 
   // Study notes, keyed by verse range id ("john-3-16-17").
   verseNotes: Record<string, VerseNote>;
+  lastStudy: StudyLocation | null;
 
   // Read streak
   currentReadStreak: number;
@@ -123,6 +132,7 @@ interface AppState {
   setLastRead: (location: ReadingLocation) => void;
   /** Saves (or, with empty text, deletes) the note on a verse range. */
   saveVerseNote: (id: string, reference: string, text: string) => void;
+  setLastStudy: (location: StudyLocation) => void;
 
   logReadEngagement: () => void;
   logMemoryEngagement: () => void;
@@ -197,6 +207,7 @@ export const useAppStore = create<AppState>()(
       aiFreeQuestionsAskedTodayDate: null,
 
       verseNotes: {},
+      lastStudy: null,
 
       deletedCardIds: [],
       syncedUserId: null,
@@ -272,6 +283,8 @@ export const useAppStore = create<AppState>()(
       setTranslation: (translation) => set({ translation }),
 
       setLastRead: (location) => set({ lastRead: location }),
+
+      setLastStudy: (location) => set({ lastStudy: location }),
 
       saveVerseNote: (id, reference, text) =>
         set((state) => {

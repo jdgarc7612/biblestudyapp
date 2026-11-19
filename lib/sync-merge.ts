@@ -27,6 +27,7 @@ const SCALAR_KEYS = [
   "displayName",
   "translation",
   "lastRead",
+  "lastStudy",
   "tokensEarnedToday",
   "tokensEarnedTodayDate",
   "perfectRecallBonusDate",
