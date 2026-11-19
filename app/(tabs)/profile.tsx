@@ -1,10 +1,16 @@
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useAppStore } from "../../store/useAppStore";
+import { TranslationSheet } from "../../components/read/translation-picker";
+import { deleteAccount, signOut, useAccount } from "../../lib/auth/account";
+import { TRANSLATIONS } from "../../lib/bible";
 import { isDue } from "../../lib/srs";
+import { isAccountsConfigured } from "../../lib/supabase";
+import { getSyncStatus, onSyncStatus, SyncStatus } from "../../lib/sync";
+import { useAppStore } from "../../store/useAppStore";
 
 const BADGE_LABELS: Record<string, string> = {
   "read-7": "7-Day Reading Streak",
@@ -52,8 +58,129 @@ function StreakCard({
   );
 }
 
+const SYNC_LABEL: Record<SyncStatus, string> = {
+  off: "Saved to your account",
+  syncing: "Syncing…",
+  synced: "Synced to your account",
+  error: "Couldn't sync just now. We'll try again.",
+};
+
+function useSyncStatus() {
+  const [status, setStatus] = useState<SyncStatus>(getSyncStatus());
+  useEffect(() => onSyncStatus(setStatus), []);
+  return status;
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
+      {children}
+    </Text>
+  );
+}
+
+function SettingsRow({
+  icon,
+  label,
+  value,
+  onPress,
+  danger,
+  busy,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value?: string;
+  onPress: () => void;
+  danger?: boolean;
+  busy?: boolean;
+}) {
+  const color = danger ? "#DC2626" : "#4A6FA5";
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={busy}
+      accessibilityRole="button"
+      className="flex-row items-center px-4 py-3.5 active:opacity-70"
+    >
+      <Ionicons name={icon} size={18} color={color} />
+      <Text
+        className={`flex-1 text-base ml-3 ${danger ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}
+      >
+        {label}
+      </Text>
+      {busy ? (
+        <ActivityIndicator size="small" color={color} />
+      ) : (
+        <>
+          {value ? <Text className="text-sm text-gray-400 dark:text-gray-500 mr-1">{value}</Text> : null}
+          {!danger && <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />}
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+function Divider() {
+  return <View className="h-px bg-gray-200 dark:bg-gray-700 ml-11" />;
+}
+
+function ConfirmDeleteSheet({
+  visible,
+  onCancel,
+  onConfirm,
+  busy,
+  error,
+}: {
+  visible: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+      <Pressable className="flex-1 justify-end" style={{ backgroundColor: "#00000066" }} onPress={onCancel}>
+        <Pressable className="bg-white dark:bg-gray-900 rounded-t-3xl px-6 pt-5" style={{ paddingBottom: 36 }}>
+          <View className="self-center w-10 h-1 rounded-full bg-gray-200 dark:bg-gray-700 mb-5" />
+          <Text className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete your account?</Text>
+          <Text className="text-sm text-gray-500 dark:text-gray-400 leading-5 mb-6">
+            This permanently deletes your account and everything saved to it: your memory verses,
+            streaks, badges and tokens. It also clears them from this device. This can&apos;t be undone.
+          </Text>
+          {error && <Text className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</Text>}
+          <Pressable
+            onPress={onConfirm}
+            disabled={busy}
+            className="items-center justify-center rounded-2xl active:opacity-80"
+            style={{ height: 50, backgroundColor: "#DC2626" }}
+          >
+            {busy ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text className="text-base font-semibold text-white">Delete account</Text>
+            )}
+          </Pressable>
+          <Pressable onPress={onCancel} className="items-center justify-center mt-2" style={{ height: 48 }}>
+            <Text className="text-base font-semibold text-gray-500 dark:text-gray-400">Keep my account</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
+  const user = useAccount((s) => s.user);
+  const syncStatus = useSyncStatus();
+  const translation = useAppStore((state) => state.translation);
+  const setDisplayName = useAppStore((state) => state.setDisplayName);
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [translationOpen, setTranslationOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState<null | "signout" | "delete">(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const displayName = useAppStore((state) => state.displayName);
   const tokenBalance = useAppStore((state) => state.tokenBalance);
   const currentReadStreak = useAppStore((state) => state.currentReadStreak);
@@ -67,6 +194,30 @@ export default function ProfileScreen() {
 
   const cardsMastered = memoryDeck.filter((c) => c.repetitions >= 3).length;
   const dueCount = memoryDeck.filter((c) => isDue(c.dueDate)).length;
+  const translationName = TRANSLATIONS.find((t) => t.id === translation)?.name ?? translation;
+
+  const startEditingName = () => {
+    setDraftName(displayName === "You" ? "" : displayName);
+    setEditingName(true);
+  };
+  const saveName = () => {
+    const name = draftName.trim().slice(0, 40);
+    if (name) setDisplayName(name);
+    setEditingName(false);
+  };
+  const handleSignOut = async () => {
+    setBusy("signout");
+    await signOut();
+    setBusy(null);
+  };
+  const handleDelete = async () => {
+    setDeleteError(null);
+    setBusy("delete");
+    const problem = await deleteAccount();
+    setBusy(null);
+    if (problem) setDeleteError(problem);
+    else setConfirmDelete(false);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
@@ -78,12 +229,36 @@ export default function ProfileScreen() {
           <View className="w-14 h-14 rounded-full bg-brand-blue/10 items-center justify-center mr-4">
             <Ionicons name="person" size={24} color="#4A6FA5" />
           </View>
-          <View>
-            <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-              {displayName}
-            </Text>
-            <Text className="text-sm text-gray-400 dark:text-gray-500">
-              Local profile · not yet synced
+          <View className="flex-1">
+            {editingName ? (
+              <TextInput
+                value={draftName}
+                onChangeText={setDraftName}
+                onSubmitEditing={saveName}
+                onBlur={saveName}
+                autoFocus
+                placeholder="Your first name"
+                placeholderTextColor="#9CA3AF"
+                maxLength={40}
+                returnKeyType="done"
+                className="text-2xl font-bold text-gray-900 dark:text-white border-b border-brand-blue py-0.5"
+              />
+            ) : (
+              <Pressable
+                onPress={startEditingName}
+                accessibilityRole="button"
+                accessibilityLabel="Edit your name"
+                className="flex-row items-center active:opacity-70"
+                style={{ gap: 6 }}
+              >
+                <Text className="text-2xl font-bold text-gray-900 dark:text-white" numberOfLines={1}>
+                  {displayName}
+                </Text>
+                <Ionicons name="pencil" size={14} color="#9CA3AF" />
+              </Pressable>
+            )}
+            <Text className="text-sm text-gray-400 dark:text-gray-500" numberOfLines={1}>
+              {user ? (user.email ?? "Signed in") : "Guest · saved on this device only"}
             </Text>
           </View>
         </View>
@@ -122,9 +297,7 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
         </Pressable>
 
-        <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
-          Your progress
-        </Text>
+        <SectionLabel>Your progress</SectionLabel>
         <View className="flex-row mb-8" style={{ gap: 10 }}>
           <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-4">
             <Text className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -144,9 +317,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
-          Badges
-        </Text>
+        <SectionLabel>Badges</SectionLabel>
         {milestonesAchieved.length === 0 ? (
           <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-5 py-6 items-center">
             <Ionicons name="ribbon-outline" size={22} color="#9CA3AF" />
@@ -170,7 +341,88 @@ export default function ProfileScreen() {
             ))}
           </View>
         )}
+
+        <View className="mt-8">
+          <SectionLabel>Settings</SectionLabel>
+          <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 mb-8">
+            <SettingsRow
+              icon="book-outline"
+              label="Translation"
+              value={translationName}
+              onPress={() => setTranslationOpen(true)}
+            />
+          </View>
+
+          <SectionLabel>Account</SectionLabel>
+          {user ? (
+            <>
+              <View className="rounded-2xl bg-gray-50 dark:bg-gray-800">
+                <View className="flex-row items-center px-4 py-3.5">
+                  <Ionicons
+                    name={syncStatus === "error" ? "cloud-offline-outline" : "cloud-done-outline"}
+                    size={18}
+                    color={syncStatus === "error" ? "#C19A6B" : "#4A6FA5"}
+                  />
+                  <Text className="flex-1 text-sm text-gray-500 dark:text-gray-400 ml-3">
+                    {SYNC_LABEL[syncStatus]}
+                  </Text>
+                </View>
+                <Divider />
+                <SettingsRow
+                  icon="log-out-outline"
+                  label="Sign out"
+                  onPress={handleSignOut}
+                  busy={busy === "signout"}
+                />
+                <Divider />
+                <SettingsRow
+                  icon="trash-outline"
+                  label="Delete account"
+                  danger
+                  onPress={() => {
+                    setDeleteError(null);
+                    setConfirmDelete(true);
+                  }}
+                />
+              </View>
+              <Text className="text-xs text-gray-400 dark:text-gray-500 mt-3 leading-5">
+                Signing out keeps your progress in your account and clears it from this device.
+              </Text>
+            </>
+          ) : (
+            <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-5 py-5">
+              <View className="flex-row items-center mb-2" style={{ gap: 8 }}>
+                <Ionicons name="cloud-upload-outline" size={18} color="#4A6FA5" />
+                <Text className="text-base font-semibold text-gray-900 dark:text-white">
+                  Keep your progress safe
+                </Text>
+              </View>
+              <Text className="text-sm text-gray-500 dark:text-gray-400 leading-5 mb-4">
+                {isAccountsConfigured
+                  ? "Sign in to save your verses and streaks to your account and pick up on any device."
+                  : "Accounts are coming soon. For now, your progress is saved on this device."}
+              </Text>
+              {isAccountsConfigured && (
+                <Pressable
+                  onPress={() => router.push("/sign-in")}
+                  className="items-center justify-center rounded-2xl active:opacity-80"
+                  style={{ height: 46, backgroundColor: "#4A6FA5" }}
+                >
+                  <Text className="text-base font-semibold text-white">Sign in or create an account</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
       </ScrollView>
+      <TranslationSheet visible={translationOpen} onClose={() => setTranslationOpen(false)} />
+      <ConfirmDeleteSheet
+        visible={confirmDelete}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+        busy={busy === "delete"}
+        error={deleteError}
+      />
     </SafeAreaView>
   );
 }

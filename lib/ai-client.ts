@@ -1,6 +1,7 @@
 import { AI_ENDPOINT, isLiveAiConfigured } from "./ai-config";
 import type { TranslationId } from "./bible-types";
 import { generateMockAnswer, VerseContext } from "./mock-ai";
+import { getSupabase } from "./supabase";
 
 export interface AskHistoryItem {
   role: "user" | "assistant";
@@ -15,8 +16,25 @@ export interface AskRequest {
 }
 
 export type AskResult =
-  | { ok: true; answer: string; live: boolean }
-  | { ok: false; message: string };
+  /** remaining: today's free questions left on the account (signed-in readers only). */
+  | { ok: true; answer: string; live: boolean; remaining?: number }
+  | { ok: false; message: string; limitReached?: boolean };
+
+/** Signed-in readers send their sign-in, so the daily limit follows the account. */
+async function accountHeaders(): Promise<Record<string, string>> {
+  const supabase = getSupabase();
+  if (!supabase) return {};
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return {};
+  let timeZone = "";
+  try {
+    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    // Leave it to the server (UTC).
+  }
+  return { Authorization: `Bearer ${token}`, ...(timeZone ? { "X-Timezone": timeZone } : {}) };
+}
 
 const TIMEOUT_MS = 45_000;
 const HISTORY_LIMIT = 8;
@@ -36,7 +54,7 @@ export async function askStudyCompanion(req: AskRequest): Promise<AskResult> {
   try {
     const res = await fetch(`${AI_ENDPOINT}/ask`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await accountHeaders()) },
       body: JSON.stringify({
         question: req.question,
         verse: req.context ? { reference: req.context.reference, text: req.context.text } : null,
@@ -45,11 +63,24 @@ export async function askStudyCompanion(req: AskRequest): Promise<AskResult> {
       }),
       signal: controller.signal,
     });
-    const data = (await res.json().catch(() => ({}))) as { answer?: string; error?: string };
-    if (res.ok && data.answer) return { ok: true, answer: data.answer, live: true };
+    const data = (await res.json().catch(() => ({}))) as {
+      answer?: string;
+      error?: string;
+      code?: string;
+      remaining?: number;
+    };
+    if (res.ok && data.answer) {
+      return {
+        ok: true,
+        answer: data.answer,
+        live: true,
+        remaining: typeof data.remaining === "number" ? data.remaining : undefined,
+      };
+    }
     return {
       ok: false,
       message: data.error ?? "I couldn't get an answer just now. Please try again in a moment.",
+      limitReached: data.code === "daily_limit",
     };
   } catch {
     return {

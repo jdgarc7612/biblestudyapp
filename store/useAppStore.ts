@@ -89,6 +89,13 @@ interface AppState {
   aiFreeQuestionsAskedToday: number;
   aiFreeQuestionsAskedTodayDate: string | null;
 
+  // Account sync (see lib/sync.ts). Cards removed on any device, so a sync doesn't bring them back.
+  deletedCardIds: string[];
+  /** The account this device last synced with; null while browsing as a guest. */
+  syncedUserId: string | null;
+  /** When synced data last changed on this device (ms). */
+  syncUpdatedAt: number;
+
   setTokenBalance: (amount: number) => void;
   addTokens: (amount: number) => void;
   spendTokens: (amount: number) => boolean;
@@ -111,6 +118,10 @@ interface AppState {
   claimOnboardingBonus: (key: OnboardingBonusKey) => void;
   aiQuestionsRemainingToday: () => number;
   recordAiQuestionAsked: () => void;
+  /** The server's count of today's free questions for this account. */
+  setAiQuestionsUsedToday: (used: number) => void;
+  /** Back to a fresh guest profile on this device (after signing out or deleting the account). */
+  resetLocalData: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -172,6 +183,10 @@ export const useAppStore = create<AppState>()(
       aiFreeQuestionsAskedToday: 0,
       aiFreeQuestionsAskedTodayDate: null,
 
+      deletedCardIds: [],
+      syncedUserId: null,
+      syncUpdatedAt: 0,
+
       setTokenBalance: (amount) => set({ tokenBalance: amount }),
 
       addTokens: (amount) =>
@@ -186,6 +201,7 @@ export const useAppStore = create<AppState>()(
 
       addToMemoryDeck: (card) => {
         set((state) => ({
+          deletedCardIds: state.deletedCardIds.filter((d) => d !== card.id),
           memoryDeck: [
             ...state.memoryDeck,
             {
@@ -205,6 +221,7 @@ export const useAppStore = create<AppState>()(
       removeFromMemoryDeck: (id) =>
         set((state) => ({
           memoryDeck: state.memoryDeck.filter((c) => c.id !== id),
+          deletedCardIds: [...state.deletedCardIds.filter((d) => d !== id), id].slice(-500),
         })),
 
       reviewCard: (id, grade) => {
@@ -338,6 +355,18 @@ export const useAppStore = create<AppState>()(
           aiFreeQuestionsAskedToday: askedToday + 1,
           aiFreeQuestionsAskedTodayDate: today,
         });
+      },
+
+      setAiQuestionsUsedToday: (used) =>
+        set({ aiFreeQuestionsAskedToday: used, aiFreeQuestionsAskedTodayDate: localDateString() }),
+
+      resetLocalData: () => {
+        const fresh = useAppStore.getInitialState();
+        const data: Partial<AppState> = {};
+        for (const [key, value] of Object.entries(fresh)) {
+          if (typeof value !== "function") (data as Record<string, unknown>)[key] = value;
+        }
+        set(data);
       },
       };
     },

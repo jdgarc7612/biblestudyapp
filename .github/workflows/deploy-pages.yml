@@ -29,6 +29,10 @@ jobs:
           # The study companion's address (see server/ai-worker/README.md). Left empty,
           # Ask AI uses its built-in preview answers.
           EXPO_PUBLIC_AI_ENDPOINT: ${{ vars.EXPO_PUBLIC_AI_ENDPOINT }}
+          # Accounts and sync (see docs/accounts-setup.md). Left empty, the app runs guest-only.
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_KEY }}
+          EXPO_PUBLIC_AUTH_PROVIDERS: ${{ vars.EXPO_PUBLIC_AUTH_PROVIDERS }}
       # GitHub Pages serves 404.html for any address it has no file for. Using the app's own
       # not-found page lets the app take over instead of showing GitHub's error page.
       - run: cp "dist/+not-found.html" dist/404.html

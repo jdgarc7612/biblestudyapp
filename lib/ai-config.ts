@@ -1,4 +1,7 @@
-/** Free live AI questions per day, per device. */
+/**
+ * Free live AI questions per day: per account when signed in (counted on the server), per
+ * device for guests. Keep AI_DAILY_LIMIT on the worker in step if this changes.
+ */
 export const AI_DAILY_QUESTION_LIMIT = 5;
 
 /**
