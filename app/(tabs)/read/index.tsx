@@ -4,6 +4,7 @@ import { LayoutAnimation, Platform, Pressable, ScrollView, Text, UIManager, View
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BookOverview } from "../../../components/read/book-overview";
 import { ChapterGrid } from "../../../components/read/chapter-grid";
 import { TranslationPill } from "../../../components/read/translation-picker";
 import { serifFont } from "../../../constants/fonts";
@@ -128,6 +129,7 @@ export default function ReadScreen() {
                 </Pressable>
                 {isOpen && (
                   <View className="pb-5">
+                    <BookOverview book={book} />
                     <ChapterGrid
                       book={book}
                       current={lastRead?.book === book.id ? lastRead.chapter : undefined}
