@@ -45,6 +45,8 @@ export default function AskAIScreen() {
     verseText?: string;
     autoAsk?: string;
     translation?: string;
+    /** A question to ask straight away (from Home's study prompts or the study panel). */
+    question?: string;
   }>();
   const router = useRouter();
 
@@ -145,18 +147,21 @@ export default function AskAIScreen() {
   };
 
   useEffect(() => {
-    if (!params.verseRef || !params.verseText) return;
-    const key = `${params.verseRef}-${params.autoAsk ?? ""}`;
+    if (!params.question && (!params.verseRef || !params.verseText)) return;
+    const key = `${params.verseRef ?? ""}-${params.autoAsk ?? ""}-${params.question ?? ""}`;
     if (handledParamsKey.current === key) return;
     handledParamsKey.current = key;
 
-    const context: VerseContext = { reference: params.verseRef, text: params.verseText };
-    setActiveContext(context);
-    if (params.autoAsk === "insights") {
+    const context: VerseContext | null =
+      params.verseRef && params.verseText ? { reference: params.verseRef, text: params.verseText } : null;
+    if (context) setActiveContext(context);
+    if (params.question) {
+      sendMessage(params.question, context);
+    } else if (context && params.autoAsk === "insights") {
       sendMessage(generateInsightRequestPrompt(context.reference), context);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.verseRef, params.verseText, params.autoAsk]);
+  }, [params.verseRef, params.verseText, params.autoAsk, params.question]);
 
 
   const isEmpty = chatMessages.length === 0;
