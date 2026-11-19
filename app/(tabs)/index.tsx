@@ -6,10 +6,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { serifFont } from "../../constants/fonts";
 import { getBookIntro } from "../../data/study/book-intros";
-import { formatReference, getBook, useChapter } from "../../lib/bible";
+import { chapterTitle, formatReference, getBook, useChapter, verseRangeId } from "../../lib/bible";
 import { useCrossReferences, useCrossReferenceText, type CrossReference } from "../../lib/cross-references";
 import { localDateString } from "../../lib/date";
 import { listNotes, notesCovering, type NoteEntry } from "../../lib/notes";
+import { isDue } from "../../lib/srs";
 import { getVerseOfTheDay } from "../../lib/verse-of-the-day";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -51,6 +52,9 @@ export default function HomeScreen() {
   const tokenBalance = useAppStore((s) => s.tokenBalance);
   const translation = useAppStore((s) => s.translation);
   const lastStudy = useAppStore((s) => s.lastStudy);
+  const lastRead = useAppStore((s) => s.lastRead);
+  const memoryDeck = useAppStore((s) => s.memoryDeck);
+  const addToMemoryDeck = useAppStore((s) => s.addToMemoryDeck);
   const verseNotes = useAppStore((s) => s.verseNotes);
 
   // Re-check the date when the app comes back to the foreground, so the verse
@@ -212,6 +216,31 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
+        <PickUp
+          lastRead={lastRead}
+          dueCount={memoryDeck.filter((c) => isDue(c.dueDate)).length}
+          deckSize={memoryDeck.length}
+          suggestion={focusText ? { reference: focus.reference, text: focusText } : null}
+          onRead={(book, chapter) =>
+            router.push({ pathname: "/read/[book]/[chapter]", params: { book, chapter: String(chapter) } })
+          }
+          onRecap={(title) =>
+            router.push({
+              pathname: "/ai",
+              params: { question: `Give me a short recap of ${title} so I can pick up where I left off.` },
+            })
+          }
+          onMemory={() => router.push("/memory")}
+          onAddSuggestion={() =>
+            addToMemoryDeck({
+              id: verseRangeId(focus.book, focus.chapter, focus.start, focus.end),
+              verseReference: focus.reference,
+              verseText: focusText,
+              translation,
+            })
+          }
+        />
+
         {allNotes.length > 0 && (
           <RecentNotes
             notes={allNotes.slice(0, 2)}
@@ -288,6 +317,112 @@ function AskBar({ onAsk }: { onAsk: (question: string) => void }) {
           </Pressable>
         ))}
       </ScrollView>
+    </View>
+  );
+}
+
+/** Where to pick back up: the chapter you were reading, and your memory verses. */
+function PickUp({
+  lastRead,
+  dueCount,
+  deckSize,
+  suggestion,
+  onRead,
+  onRecap,
+  onMemory,
+  onAddSuggestion,
+}: {
+  lastRead: { book: string; chapter: number } | null;
+  dueCount: number;
+  deckSize: number;
+  suggestion: { reference: string; text: string } | null;
+  onRead: (book: string, chapter: number) => void;
+  onRecap: (title: string) => void;
+  onMemory: () => void;
+  onAddSuggestion: () => void;
+}) {
+  const readBook = lastRead ? getBook(lastRead.book) : undefined;
+  const title = lastRead && readBook ? chapterTitle(readBook.name, lastRead.chapter) : null;
+  const theme = lastRead ? getBookIntro(lastRead.book)?.theme : undefined;
+
+  return (
+    <View className="mt-6">
+      <Text className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2.5">
+        {title ? "Pick up where you left off" : "Get started"}
+      </Text>
+      <View className="rounded-2xl border border-gray-100 dark:border-gray-800">
+        {/* Reading */}
+        <Pressable
+          onPress={() => (lastRead ? onRead(lastRead.book, lastRead.chapter) : onRead("john", 1))}
+          className="flex-row items-center px-4 py-3.5 active:opacity-70"
+        >
+          <View className="w-9 h-9 rounded-full bg-brand-blue/10 items-center justify-center mr-3">
+            <Ionicons name="book" size={16} color={BLUE} />
+          </View>
+          <View className="flex-1 mr-2">
+            <Text className="text-[15px] font-semibold text-gray-900 dark:text-white">
+              {title ? `Continue ${title}` : "Start with the Gospel of John"}
+            </Text>
+            <Text className="text-sm text-gray-500 dark:text-gray-400" numberOfLines={1}>
+              {title ? theme ?? "Back to your place" : "A good first book: the life of Jesus"}
+            </Text>
+          </View>
+          {title ? (
+            <Pressable
+              onPress={() => onRecap(title)}
+              hitSlop={6}
+              accessibilityLabel={`Recap ${title}`}
+              className="flex-row items-center rounded-full bg-brand-earth/15 px-3 py-1.5 active:opacity-70"
+            >
+              <Ionicons name="sparkles" size={12} color={EARTH} />
+              <Text className="text-xs font-semibold text-brand-earth ml-1">Recap</Text>
+            </Pressable>
+          ) : (
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          )}
+        </Pressable>
+
+        <View className="h-px bg-gray-100 dark:bg-gray-800 ml-16" />
+
+        {/* Memory verses */}
+        <Pressable onPress={onMemory} className="flex-row items-center px-4 py-3.5 active:opacity-70">
+          <View className="w-9 h-9 rounded-full bg-brand-earth/15 items-center justify-center mr-3">
+            <Ionicons name="albums" size={16} color={EARTH} />
+          </View>
+          <View className="flex-1 mr-2">
+            <Text className="text-[15px] font-semibold text-gray-900 dark:text-white">
+              {dueCount
+                ? `Review ${dueCount} memory ${dueCount === 1 ? "verse" : "verses"}`
+                : deckSize
+                  ? "Memory verses: all caught up"
+                  : "Memorize your first verse"}
+            </Text>
+            <Text className="text-sm text-gray-500 dark:text-gray-400" numberOfLines={1}>
+              {dueCount
+                ? "Due today"
+                : deckSize
+                  ? `${deckSize} in your deck`
+                  : suggestion
+                    ? `Start with ${suggestion.reference}`
+                    : "Pick a verse in the Reader"}
+            </Text>
+          </View>
+          {!deckSize && suggestion ? (
+            <Pressable
+              onPress={onAddSuggestion}
+              hitSlop={6}
+              accessibilityLabel={`Add ${suggestion.reference} to your memory verses`}
+              className="flex-row items-center rounded-full px-3 py-1.5 active:opacity-80"
+              style={{ backgroundColor: BLUE }}
+            >
+              <Ionicons name="add" size={13} color="#FFFFFF" />
+              <Text className="text-xs font-semibold text-white ml-0.5">Add</Text>
+            </Pressable>
+          ) : (
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
