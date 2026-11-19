@@ -1,10 +1,12 @@
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { Link, Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -13,25 +15,63 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import johnData from "../../../data/bible/john.json";
-import { serifFont } from "../../../constants/fonts";
-import { localDateString } from "../../../lib/date";
-import { useAppStore } from "../../../store/useAppStore";
+import { TranslationPill } from "../../../../components/read/translation-picker";
+import { serifFont } from "../../../../constants/fonts";
+import {
+  BOOKS,
+  chapterTitle,
+  formatReference,
+  getBook,
+  parseVerseRangeId,
+  useChapter,
+  verseRangeId,
+} from "../../../../lib/bible";
+import { localDateString } from "../../../../lib/date";
+import { useAppStore } from "../../../../store/useAppStore";
 
 const READ_ENGAGEMENT_SECONDS = 20;
 
-function parseCardRange(id: string): { chapter: number; start: number; end: number } | null {
-  const parts = id.split("-");
-  if (parts.length !== 4 || parts[0] !== "john") return null;
-  const [, chapter, start, end] = parts;
-  return { chapter: Number(chapter), start: Number(start), end: Number(end) };
+// Stops the browser from highlighting text while swiping the action bar on the web.
+const NO_SELECT = Platform.OS === "web" ? ({ userSelect: "none" } as object) : undefined;
+
+export async function generateStaticParams(): Promise<{ book: string; chapter: string }[]> {
+  return BOOKS.flatMap((b) =>
+    Array.from({ length: b.chapters }, (_, i) => ({ book: b.id, chapter: String(i + 1) }))
+  );
+}
+
+/** The chapter before/after this one, crossing into the neighbouring book when needed. */
+function neighbour(bookId: string, chapter: number, step: 1 | -1) {
+  const index = BOOKS.findIndex((b) => b.id === bookId);
+  const book = BOOKS[index];
+  if (!book) return null;
+  const next = chapter + step;
+  if (next >= 1 && next <= book.chapters) return { book, chapter: next };
+  const other = BOOKS[index + step];
+  if (!other) return null;
+  return { book: other, chapter: step === 1 ? 1 : other.chapters };
 }
 
 export default function ChapterScreen() {
-  const { chapter } = useLocalSearchParams<{ chapter: string }>();
-  const router = useRouter();
+  const { book: bookParam, chapter } = useLocalSearchParams<{ book: string; chapter: string }>();
+  const book = getBook(bookParam);
   const chapterNum = Number(chapter);
-  const chapterData = johnData.chapters.find((c) => c.chapter === chapterNum);
+  if (!book || !Number.isInteger(chapterNum) || chapterNum < 1 || chapterNum > book.chapters) {
+    return <Redirect href="/read" />;
+  }
+  return <ChapterReader key={`${book.id}-${chapterNum}`} bookId={book.id} chapterNum={chapterNum} />;
+}
+
+function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: number }) {
+  const router = useRouter();
+  const book = getBook(bookId)!;
+  const translation = useAppStore((state) => state.translation);
+  const setLastRead = useAppStore((state) => state.setLastRead);
+  const chapterData = useChapter(translation, bookId, chapterNum);
+
+  useEffect(() => {
+    setLastRead({ book: bookId, chapter: chapterNum });
+  }, [bookId, chapterNum, setLastRead]);
 
   const memoryDeck = useAppStore((state) => state.memoryDeck);
   const addToMemoryDeck = useAppStore((state) => state.addToMemoryDeck);
@@ -70,8 +110,11 @@ export default function ChapterScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const savedRanges = useMemo(
-    () => memoryDeck.map((c) => parseCardRange(c.id)).filter((r) => r !== null),
-    [memoryDeck]
+    () =>
+      memoryDeck
+        .map((c) => parseVerseRangeId(c.id))
+        .filter((r) => r !== null && r.book === bookId && r.chapter === chapterNum),
+    [memoryDeck, bookId, chapterNum]
   );
 
   const swipeResponder = useRef(
@@ -87,10 +130,8 @@ export default function ChapterScreen() {
     })
   ).current;
 
-  if (!chapterData) return null;
-
-  const hasPrev = chapterNum > 1;
-  const hasNext = chapterNum < johnData.chapters.length;
+  const prev = neighbour(bookId, chapterNum, -1);
+  const next = neighbour(bookId, chapterNum, 1);
 
   const handleVersePress = (verseNum: number) => {
     if (!selection) {
@@ -120,12 +161,12 @@ export default function ChapterScreen() {
   const selectedText = selectedVerses.map((v) => v.text).join(" ");
   const verseReference =
     rangeStart !== null && rangeEnd !== null
-      ? rangeStart === rangeEnd
-        ? `${johnData.name} ${chapterNum}:${rangeStart}`
-        : `${johnData.name} ${chapterNum}:${rangeStart}-${rangeEnd}`
+      ? formatReference(book.name, chapterNum, rangeStart, rangeEnd)
       : "";
   const cardId =
-    rangeStart !== null && rangeEnd !== null ? `john-${chapterNum}-${rangeStart}-${rangeEnd}` : null;
+    rangeStart !== null && rangeEnd !== null
+      ? verseRangeId(bookId, chapterNum, rangeStart, rangeEnd)
+      : null;
   const isInDeck = cardId ? memoryDeck.some((c) => c.id === cardId) : false;
 
   const goToAI = (autoAsk?: "insights") => {
@@ -135,6 +176,7 @@ export default function ChapterScreen() {
       params: {
         verseRef: verseReference,
         verseText: selectedText,
+        translation,
         ...(autoAsk ? { autoAsk } : {}),
       },
     });
@@ -149,7 +191,7 @@ export default function ChapterScreen() {
         id: cardId,
         verseReference,
         verseText: selectedText,
-        translation: johnData.translation,
+        translation,
       });
     }
     clearSelection();
@@ -158,12 +200,24 @@ export default function ChapterScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-1 active:opacity-60">
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/read"))}
+          hitSlop={12}
+          accessibilityLabel="Back"
+          className="p-1 active:opacity-60"
+        >
           <Ionicons name="chevron-back" size={24} color="#4A6FA5" />
         </Pressable>
-        <Text className="text-base font-semibold text-gray-900 dark:text-white">
-          {johnData.name} {chapterNum}
-        </Text>
+        <View className="flex-row items-center" style={{ gap: 10 }}>
+          <Link href={{ pathname: "/read/[book]", params: { book: bookId } }} asChild>
+            <Pressable hitSlop={8} accessibilityLabel={`${chapterTitle(book.name, chapterNum)}. Choose a chapter`} className="active:opacity-60">
+              <Text className="text-base font-semibold text-gray-900 dark:text-white">
+                {chapterTitle(book.name, chapterNum)}
+              </Text>
+            </Pressable>
+          </Link>
+          <TranslationPill compact />
+        </View>
         <Pressable
           onPress={handleMarkAsRead}
           hitSlop={8}
@@ -186,12 +240,43 @@ export default function ChapterScreen() {
       >
         <Text
           style={{ fontFamily: serifFont }}
+          className="text-3xl text-gray-900 dark:text-white mb-1"
+        >
+          {chapterTitle(book.name, chapterNum)}
+        </Text>
+        {chapterData.title ? (
+          <Text
+            style={{ fontFamily: serifFont }}
+            className="text-base italic text-gray-500 dark:text-gray-400 mt-2 mb-2 leading-6"
+          >
+            {chapterData.title}
+          </Text>
+        ) : null}
+        <View className="h-4" />
+        {chapterData.loading ? (
+          <View className="py-16 items-center">
+            <ActivityIndicator color="#4A6FA5" />
+          </View>
+        ) : chapterData.error ? (
+          <View className="py-16 items-center">
+            <Text className="text-base text-gray-500 dark:text-gray-400 mb-4 text-center">
+              This chapter didn&apos;t load. Check your connection and try again.
+            </Text>
+            <Pressable
+              onPress={chapterData.retry}
+              className="rounded-xl px-5 py-2.5 active:opacity-80"
+              style={{ backgroundColor: "#4A6FA5" }}
+            >
+              <Text className="text-sm font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
+        ) : (
+        <Text
+          style={{ fontFamily: serifFont }}
           className="text-lg leading-8 text-gray-900 dark:text-gray-100"
         >
           {chapterData.verses.map((v) => {
-            const saved = savedRanges.some(
-              (r) => r.chapter === chapterNum && v.verse >= r.start && v.verse <= r.end
-            );
+            const saved = savedRanges.some((r) => r && v.verse >= r.start && v.verse <= r.end);
             const inSelection =
               rangeStart !== null && rangeEnd !== null && v.verse >= rangeStart && v.verse <= rangeEnd;
             return (
@@ -212,13 +297,19 @@ export default function ChapterScreen() {
             );
           })}
         </Text>
+        )}
+        {!chapterData.loading && !chapterData.error && (
+          <Text className="text-[11px] text-gray-300 dark:text-gray-600 mt-8">
+            {translation} · Public domain
+          </Text>
+        )}
       </ScrollView>
 
       {selection ? (
         <View
           {...swipeResponder.panHandlers}
           className="flex-row items-center px-4 py-3 border-t border-gray-100 dark:border-gray-800"
-          style={{ userSelect: "none" }}
+          style={NO_SELECT}
         >
           <Pressable
             onPress={clearSelection}
@@ -275,34 +366,40 @@ export default function ChapterScreen() {
         </View>
       ) : (
         <View className="flex-row items-center justify-between px-5 py-4 border-t border-gray-100 dark:border-gray-800">
-          <Link
-            href={{ pathname: "/read/[chapter]", params: { chapter: String(chapterNum - 1) } }}
-            replace
-            asChild
+          <Pressable
+            disabled={!prev}
+            onPress={() =>
+              prev &&
+              router.replace({
+                pathname: "/read/[book]/[chapter]",
+                params: { book: prev.book.id, chapter: String(prev.chapter) },
+              })
+            }
+            className="flex-row items-center px-4 py-2 rounded-xl active:opacity-60"
+            style={{ opacity: prev ? 1 : 0.3 }}
           >
-            <Pressable
-              disabled={!hasPrev}
-              className="flex-row items-center px-4 py-2 rounded-xl"
-              style={{ opacity: hasPrev ? 1 : 0.3 }}
-            >
-              <Ionicons name="chevron-back" size={16} color="#4A6FA5" />
-              <Text className="text-sm font-semibold text-brand-blue ml-1">Previous</Text>
-            </Pressable>
-          </Link>
-          <Link
-            href={{ pathname: "/read/[chapter]", params: { chapter: String(chapterNum + 1) } }}
-            replace
-            asChild
+            <Ionicons name="chevron-back" size={16} color="#4A6FA5" />
+            <Text className="text-sm font-semibold text-brand-blue ml-1">
+              {prev ? `${prev.book.short} ${prev.chapter}` : "Previous"}
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={!next}
+            onPress={() =>
+              next &&
+              router.replace({
+                pathname: "/read/[book]/[chapter]",
+                params: { book: next.book.id, chapter: String(next.chapter) },
+              })
+            }
+            className="flex-row items-center px-4 py-2 rounded-xl active:opacity-60"
+            style={{ opacity: next ? 1 : 0.3 }}
           >
-            <Pressable
-              disabled={!hasNext}
-              className="flex-row items-center px-4 py-2 rounded-xl"
-              style={{ opacity: hasNext ? 1 : 0.3 }}
-            >
-              <Text className="text-sm font-semibold text-brand-blue mr-1">Next</Text>
-              <Ionicons name="chevron-forward" size={16} color="#4A6FA5" />
-            </Pressable>
-          </Link>
+            <Text className="text-sm font-semibold text-brand-blue mr-1">
+              {next ? `${next.book.short} ${next.chapter}` : "Next"}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#4A6FA5" />
+          </Pressable>
         </View>
       )}
 

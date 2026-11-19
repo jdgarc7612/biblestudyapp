@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -14,8 +14,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { FormattedText } from "../../components/ai/formatted-text";
 import { serifFont } from "../../constants/fonts";
+import { AI_DAILY_QUESTION_LIMIT, isLiveAiConfigured } from "../../lib/ai-config";
+import { askStudyCompanion } from "../../lib/ai-client";
+import { isTranslationId, type FoundReference } from "../../lib/bible";
 import { localDateString } from "../../lib/date";
-import { generateInsightRequestPrompt, generateMockAnswer, VerseContext } from "../../lib/mock-ai";
+import { generateInsightRequestPrompt, VerseContext } from "../../lib/mock-ai";
 import { useAppStore } from "../../store/useAppStore";
 
 const TOPIC_PROMPTS = [
@@ -41,7 +44,9 @@ export default function AskAIScreen() {
     verseRef?: string;
     verseText?: string;
     autoAsk?: string;
+    translation?: string;
   }>();
+  const router = useRouter();
 
   const chatMessages = useAppStore((state) => state.chatMessages);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
@@ -49,25 +54,66 @@ export default function AskAIScreen() {
   const claimOnboardingBonus = useAppStore((state) => state.claimOnboardingBonus);
   const aiFreeQuestionsAskedToday = useAppStore((state) => state.aiFreeQuestionsAskedToday);
   const aiFreeQuestionsAskedTodayDate = useAppStore((state) => state.aiFreeQuestionsAskedTodayDate);
-  const aiFreeDailyAllowance = useAppStore((state) => state.aiFreeDailyAllowance);
-  const aiEarnedTokenQuestionsThisMonth = useAppStore((state) => state.aiEarnedTokenQuestionsThisMonth);
-  const aiEarnedTokenQuestionsMonthDate = useAppStore((state) => state.aiEarnedTokenQuestionsMonthDate);
-  const aiEarnedTokenMonthlyCap = useAppStore((state) => state.aiEarnedTokenMonthlyCap);
+  const savedTranslation = useAppStore((state) => state.translation);
 
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [activeContext, setActiveContext] = useState<VerseContext | null>(null);
+  const [failed, setFailed] = useState<{
+    message: string;
+    question: string;
+    context: VerseContext | null;
+  } | null>(null);
   const handledParamsKey = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   const today = localDateString();
   const freeAskedToday =
     aiFreeQuestionsAskedTodayDate === today ? aiFreeQuestionsAskedToday : 0;
-  const freeQuestionsRemaining = Math.max(0, aiFreeDailyAllowance - freeAskedToday);
-  const earnedAskedThisMonth =
-    aiEarnedTokenQuestionsMonthDate === today.slice(0, 7) ? aiEarnedTokenQuestionsThisMonth : 0;
-  const earnedQuestionsRemaining = Math.max(0, aiEarnedTokenMonthlyCap - earnedAskedThisMonth);
-  const canSend = freeQuestionsRemaining > 0 || earnedQuestionsRemaining > 0;
+  const questionsLeft = Math.max(0, AI_DAILY_QUESTION_LIMIT - freeAskedToday);
+  const canSend = questionsLeft > 0 && !isThinking;
+  const translation =
+    params.translation && isTranslationId(params.translation) ? params.translation : savedTranslation;
+
+  const openReference = (ref: FoundReference) => {
+    router.push({
+      pathname: "/read/[book]/[chapter]",
+      params: { book: ref.book.id, chapter: String(ref.chapter) },
+    });
+  };
+
+  /**
+   * Asks the study companion. The question only counts against today's limit once an
+   * answer comes back, so a dropped connection never costs anyone a question.
+   */
+  const ask = async (question: string, context: VerseContext | null) => {
+    setIsThinking(true);
+    setFailed(null);
+    // Everything said so far, so follow-up questions keep their meaning.
+    const history = useAppStore
+      .getState()
+      .chatMessages.slice(0, -1)
+      .map((m) => ({ role: m.role, content: m.content }));
+    const result = await askStudyCompanion({
+      question,
+      context: context ?? undefined,
+      translation,
+      history,
+    });
+    if (result.ok) {
+      addChatMessage({
+        id: makeId(),
+        role: "assistant",
+        content: result.answer,
+        createdAt: new Date().toISOString(),
+      });
+      recordAiQuestionAsked();
+      claimOnboardingBonus("firstAiQuestion");
+    } else {
+      setFailed({ message: result.message, question, context });
+    }
+    setIsThinking(false);
+  };
 
   const sendMessage = (content: string, contextOverride?: VerseContext | null) => {
     const trimmed = content.trim();
@@ -83,19 +129,12 @@ export default function AskAIScreen() {
       createdAt: new Date().toISOString(),
     });
     setInput("");
-    setIsThinking(true);
-    recordAiQuestionAsked();
-    claimOnboardingBonus("firstAiQuestion");
+    void ask(trimmed, context);
+  };
 
-    setTimeout(() => {
-      addChatMessage({
-        id: makeId(),
-        role: "assistant",
-        content: generateMockAnswer(trimmed, context ?? undefined),
-        createdAt: new Date().toISOString(),
-      });
-      setIsThinking(false);
-    }, 700 + Math.random() * 500);
+  const retry = () => {
+    if (!failed || questionsLeft === 0) return;
+    void ask(failed.question, failed.context);
   };
 
   useEffect(() => {
@@ -129,6 +168,7 @@ export default function AskAIScreen() {
               onPress={() => {
                 useAppStore.getState().clearChat();
                 setActiveContext(null);
+                setFailed(null);
               }}
               hitSlop={8}
               className="active:opacity-60"
@@ -141,7 +181,11 @@ export default function AskAIScreen() {
         </View>
 
         {isEmpty ? (
-          <View className="flex-1 px-6 pt-8">
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16 }}
+            keyboardShouldPersistTaps="handled"
+          >
             <View className="w-14 h-14 rounded-full bg-brand-blue/10 items-center justify-center mb-5">
               <Ionicons name="sparkles" size={24} color="#4A6FA5" />
             </View>
@@ -149,7 +193,8 @@ export default function AskAIScreen() {
               Ask me anything about Scripture
             </Text>
             <Text className="text-base text-gray-400 dark:text-gray-500 mb-8">
-              Get a grounded, thoughtful answer — no question is too basic.
+              Answers grounded in Scripture, with the verses to read for yourself. No question is
+              too basic.
             </Text>
 
             <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
@@ -194,7 +239,7 @@ export default function AskAIScreen() {
                 </Pressable>
               ))}
             </View>
-          </View>
+          </ScrollView>
         ) : (
           <ScrollView
             ref={scrollRef}
@@ -222,6 +267,7 @@ export default function AskAIScreen() {
                       text={item.content}
                       className="text-base text-gray-900 dark:text-gray-900"
                       style={{ lineHeight: 22 }}
+                      onReferencePress={openReference}
                     />
                   )}
                 </View>
@@ -229,8 +275,26 @@ export default function AskAIScreen() {
             })}
             {isThinking && (
               <View className="self-start max-w-[85%] rounded-2xl rounded-bl-md px-4 py-3 bg-gray-50 dark:bg-gray-800">
-                <Text className="text-sm text-gray-400 dark:text-gray-500">Thinking…</Text>
+                <Text className="text-sm text-gray-400 dark:text-gray-500">
+                  Searching the Scriptures…
+                </Text>
               </View>
+            )}
+            {failed && !isThinking && (
+              <View
+                className="self-start max-w-[85%] rounded-2xl px-4 py-3"
+                style={{ backgroundColor: "#C19A6B1A", borderBottomLeftRadius: 4 }}
+              >
+                <Text className="text-sm text-gray-700 dark:text-gray-200 mb-2">{failed.message}</Text>
+                <Pressable onPress={retry} hitSlop={8} className="self-start active:opacity-60">
+                  <Text className="text-sm font-semibold text-brand-blue">Try again</Text>
+                </Pressable>
+              </View>
+            )}
+            {!isLiveAiConfigured && (
+              <Text className="text-[11px] text-gray-300 dark:text-gray-600 text-center mt-2">
+                Preview answers. Full answers arrive once the study companion is switched on.
+              </Text>
             )}
           </ScrollView>
         )}
@@ -251,18 +315,18 @@ export default function AskAIScreen() {
           </View>
         )}
 
-        {!canSend ? (
+        {questionsLeft === 0 ? (
           <View className="flex-row items-center mx-5 mb-2 px-3 py-2.5 rounded-xl bg-brand-earth/10">
             <Ionicons name="hourglass-outline" size={14} color="#C19A6B" />
             <Text className="flex-1 text-xs text-gray-600 dark:text-gray-300 ml-2">
-              You've used today's free questions — come back tomorrow for more.
+              That&apos;s all {AI_DAILY_QUESTION_LIMIT} of today&apos;s questions. You get{" "}
+              {AI_DAILY_QUESTION_LIMIT} more tomorrow, and the Bible is always open in the meantime.
             </Text>
           </View>
         ) : (
-          freeQuestionsRemaining <= 1 && (
+          questionsLeft < AI_DAILY_QUESTION_LIMIT && (
             <Text className="text-[11px] text-gray-400 dark:text-gray-500 mx-5 mb-1.5">
-              {freeQuestionsRemaining} free {freeQuestionsRemaining === 1 ? "question" : "questions"}{" "}
-              left today
+              {questionsLeft} of {AI_DAILY_QUESTION_LIMIT} free questions left today
             </Text>
           )
         )}
@@ -271,12 +335,12 @@ export default function AskAIScreen() {
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder={canSend ? "Ask a question…" : "Come back tomorrow for more questions"}
+            placeholder={questionsLeft > 0 ? "Ask a question…" : "Come back tomorrow for more questions"}
             placeholderTextColor="#9CA3AF"
             multiline
-            editable={canSend}
+            editable={questionsLeft > 0}
             className="flex-1 text-base text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3"
-            style={{ maxHeight: 100, opacity: canSend ? 1 : 0.6 }}
+            style={{ maxHeight: 100, opacity: questionsLeft > 0 ? 1 : 0.6 }}
           />
           <Pressable
             onPress={() => sendMessage(input)}

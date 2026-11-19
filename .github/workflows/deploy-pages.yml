@@ -25,6 +25,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx expo export -p web
+        env:
+          # The study companion's address (see server/ai-worker/README.md). Left empty,
+          # Ask AI uses its built-in preview answers.
+          EXPO_PUBLIC_AI_ENDPOINT: ${{ vars.EXPO_PUBLIC_AI_ENDPOINT }}
+      # GitHub Pages serves 404.html for any address it has no file for. Using the app's own
+      # not-found page lets the app take over instead of showing GitHub's error page.
+      - run: cp "dist/+not-found.html" dist/404.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { localDateString, localMonthString } from "../lib/date";
+import { AI_DAILY_QUESTION_LIMIT } from "../lib/ai-config";
+import { DEFAULT_TRANSLATION, TranslationId } from "../lib/bible-types";
+import { localDateString } from "../lib/date";
 import {
   DAILY_ROUTINE_TOKEN_CAP,
   DAILY_SESSION_TOKENS,
@@ -46,6 +48,11 @@ export type NewMemoryCard = Pick<
 
 export type OnboardingBonusKey = "firstRead" | "firstCard" | "firstAiQuestion";
 
+export interface ReadingLocation {
+  book: string;
+  chapter: number;
+}
+
 interface AppState {
   tokenBalance: number;
   memoryDeck: MemoryCard[];
@@ -54,6 +61,10 @@ interface AppState {
   difficulty: Difficulty;
   chatMessages: ChatMessage[];
   displayName: string;
+
+  // Reading
+  translation: TranslationId;
+  lastRead: ReadingLocation | null;
 
   // Read streak
   currentReadStreak: number;
@@ -74,13 +85,9 @@ interface AppState {
   milestonesAchieved: string[];
   onboardingBonusesClaimed: OnboardingBonusKey[];
 
-  // AI usage & cost control
+  // AI usage: a free daily cap on live questions (stored on this device).
   aiFreeQuestionsAskedToday: number;
   aiFreeQuestionsAskedTodayDate: string | null;
-  aiEarnedTokenQuestionsThisMonth: number;
-  aiEarnedTokenQuestionsMonthDate: string | null;
-  aiFreeDailyAllowance: number;
-  aiEarnedTokenMonthlyCap: number;
 
   setTokenBalance: (amount: number) => void;
   addTokens: (amount: number) => void;
@@ -94,13 +101,15 @@ interface AppState {
   addChatMessage: (message: ChatMessage) => void;
   clearChat: () => void;
   setDisplayName: (name: string) => void;
+  setTranslation: (translation: TranslationId) => void;
+  setLastRead: (location: ReadingLocation) => void;
 
   logReadEngagement: () => void;
   logMemoryEngagement: () => void;
   awardPerfectRecallBonus: () => void;
   purchaseStreakFreeze: (kind: StreakKind) => boolean;
   claimOnboardingBonus: (key: OnboardingBonusKey) => void;
-  canAskAiQuestion: () => { allowed: boolean; usingEarnedTokens: boolean };
+  aiQuestionsRemainingToday: () => number;
   recordAiQuestionAsked: () => void;
 }
 
@@ -141,6 +150,9 @@ export const useAppStore = create<AppState>()(
       chatMessages: [],
       displayName: "You",
 
+      translation: DEFAULT_TRANSLATION,
+      lastRead: null,
+
       currentReadStreak: 0,
       longestReadStreak: 0,
       lastReadDate: null,
@@ -159,10 +171,6 @@ export const useAppStore = create<AppState>()(
 
       aiFreeQuestionsAskedToday: 0,
       aiFreeQuestionsAskedTodayDate: null,
-      aiEarnedTokenQuestionsThisMonth: 0,
-      aiEarnedTokenQuestionsMonthDate: null,
-      aiFreeDailyAllowance: 3,
-      aiEarnedTokenMonthlyCap: 10,
 
       setTokenBalance: (amount) => set({ tokenBalance: amount }),
 
@@ -228,6 +236,10 @@ export const useAppStore = create<AppState>()(
       clearChat: () => set({ chatMessages: [] }),
 
       setDisplayName: (name) => set({ displayName: name }),
+
+      setTranslation: (translation) => set({ translation }),
+
+      setLastRead: (location) => set({ lastRead: location }),
 
       logReadEngagement: () => {
         const today = localDateString();
@@ -308,45 +320,23 @@ export const useAppStore = create<AppState>()(
         });
       },
 
-      canAskAiQuestion: () => {
-        const today = localDateString();
-        const month = localMonthString();
+      aiQuestionsRemainingToday: () => {
         const state = get();
-        const freeAskedToday =
-          state.aiFreeQuestionsAskedTodayDate === today ? state.aiFreeQuestionsAskedToday : 0;
-        if (freeAskedToday < state.aiFreeDailyAllowance) {
-          return { allowed: true, usingEarnedTokens: false };
-        }
-        const earnedThisMonth =
-          state.aiEarnedTokenQuestionsMonthDate === month
-            ? state.aiEarnedTokenQuestionsThisMonth
+        const askedToday =
+          state.aiFreeQuestionsAskedTodayDate === localDateString()
+            ? state.aiFreeQuestionsAskedToday
             : 0;
-        if (earnedThisMonth < state.aiEarnedTokenMonthlyCap) {
-          return { allowed: true, usingEarnedTokens: true };
-        }
-        return { allowed: false, usingEarnedTokens: false };
+        return Math.max(0, AI_DAILY_QUESTION_LIMIT - askedToday);
       },
 
       recordAiQuestionAsked: () => {
         const today = localDateString();
-        const month = localMonthString();
         const state = get();
-        const freeAskedToday =
+        const askedToday =
           state.aiFreeQuestionsAskedTodayDate === today ? state.aiFreeQuestionsAskedToday : 0;
-        if (freeAskedToday < state.aiFreeDailyAllowance) {
-          set({
-            aiFreeQuestionsAskedToday: freeAskedToday + 1,
-            aiFreeQuestionsAskedTodayDate: today,
-          });
-          return;
-        }
-        const earnedThisMonth =
-          state.aiEarnedTokenQuestionsMonthDate === month
-            ? state.aiEarnedTokenQuestionsThisMonth
-            : 0;
         set({
-          aiEarnedTokenQuestionsThisMonth: earnedThisMonth + 1,
-          aiEarnedTokenQuestionsMonthDate: month,
+          aiFreeQuestionsAskedToday: askedToday + 1,
+          aiFreeQuestionsAskedTodayDate: today,
         });
       },
       };
@@ -354,6 +344,20 @@ export const useAppStore = create<AppState>()(
     {
       name: "biblestudyapp-storage",
       storage: createJSONStorage(() => storage),
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = { ...(persisted as Record<string, unknown>) };
+        if (version < 1) {
+          // v0 only had John in the WEB, and charged earned tokens for extra AI questions.
+          state.translation = "WEB";
+          state.lastRead = null;
+          delete state.aiEarnedTokenQuestionsThisMonth;
+          delete state.aiEarnedTokenQuestionsMonthDate;
+          delete state.aiFreeDailyAllowance;
+          delete state.aiEarnedTokenMonthlyCap;
+        }
+        return state as unknown as AppState;
+      },
     }
   )
 );
