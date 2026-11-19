@@ -182,6 +182,7 @@ export default function ProfileScreen() {
   const [busy, setBusy] = useState<null | "signout" | "delete">(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const displayName = useAppStore((state) => state.displayName);
+  const noteCount = useAppStore((state) => Object.values(state.verseNotes).filter((n) => n.text).length);
   const tokenBalance = useAppStore((state) => state.tokenBalance);
   const currentReadStreak = useAppStore((state) => state.currentReadStreak);
   const longestReadStreak = useAppStore((state) => state.longestReadStreak);
@@ -295,6 +296,22 @@ export default function ProfileScreen() {
             <Text className="text-xs text-white/80">Visit the Rewards Shop</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push("/notes")}
+          className="flex-row items-center rounded-2xl border border-gray-100 dark:border-gray-800 px-5 py-4 -mt-4 mb-8 active:opacity-70"
+        >
+          <View className="w-9 h-9 rounded-full bg-brand-blue/10 items-center justify-center mr-3">
+            <Ionicons name="create-outline" size={16} color="#4A6FA5" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-base font-semibold text-gray-900 dark:text-white">My notes</Text>
+            <Text className="text-xs text-gray-400 dark:text-gray-500">
+              {noteCount === 1 ? "1 note" : `${noteCount} notes`} on passages you&apos;ve studied
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
         </Pressable>
 
         <SectionLabel>Your progress</SectionLabel>

@@ -9,6 +9,7 @@
  * - Memory cards are combined by id; for a card on both, the more recently reviewed one wins.
  *   Removed cards are remembered so a sync never brings them back.
  * - Each streak comes from the copy that logged a day most recently; best streaks take the higher.
+ * - Study notes are combined by verse; for a note on both, the more recently edited one wins.
  * - Badges and claimed bonuses are combined.
  * - Settings, name and tokens come from whichever copy changed last. The first time a device
  *   joins an account that already has data, the account's copy wins, so a guest's starter
@@ -26,6 +27,7 @@ const SCALAR_KEYS = [
   "displayName",
   "translation",
   "lastRead",
+  "lastStudy",
   "tokensEarnedToday",
   "tokensEarnedTodayDate",
   "perfectRecallBonusDate",
@@ -35,6 +37,7 @@ export const SYNCED_KEYS = [
   ...SCALAR_KEYS,
   "memoryDeck",
   "deletedCardIds",
+  "verseNotes",
   "currentReadStreak",
   "longestReadStreak",
   "lastReadDate",
@@ -82,6 +85,12 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
   }
   merged.memoryDeck = [...cards.values()].sort((x, y) => x.dateAdded.localeCompare(y.dateAdded));
   merged.deletedCardIds = deleted;
+
+  const notes = { ...(remote.verseNotes ?? {}) };
+  for (const [id, note] of Object.entries(local.verseNotes ?? {})) {
+    if (!notes[id] || note.updatedAt > notes[id].updatedAt) notes[id] = note;
+  }
+  merged.verseNotes = notes;
 
   const read = streakWinner(local, remote, "lastReadDate", "currentReadStreak");
   merged.currentReadStreak = read.currentReadStreak;

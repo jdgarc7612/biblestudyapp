@@ -48,6 +48,22 @@ export type NewMemoryCard = Pick<
 
 export type OnboardingBonusKey = "firstRead" | "firstCard" | "firstAiQuestion";
 
+/** A personal study note on a verse or range. Empty text marks a deleted note, so a sync doesn't bring it back. */
+export interface VerseNote {
+  text: string;
+  /** The reference as shown when the note was written, e.g. "John 3:16-17". */
+  reference: string;
+  updatedAt: number;
+}
+
+/** The passage someone last opened the study panel on; Home picks their study back up here. */
+export interface StudyLocation {
+  book: string;
+  chapter: number;
+  start: number;
+  end: number;
+}
+
 export interface ReadingLocation {
   book: string;
   chapter: number;
@@ -65,6 +81,10 @@ interface AppState {
   // Reading
   translation: TranslationId;
   lastRead: ReadingLocation | null;
+
+  // Study notes, keyed by verse range id ("john-3-16-17").
+  verseNotes: Record<string, VerseNote>;
+  lastStudy: StudyLocation | null;
 
   // Read streak
   currentReadStreak: number;
@@ -110,6 +130,9 @@ interface AppState {
   setDisplayName: (name: string) => void;
   setTranslation: (translation: TranslationId) => void;
   setLastRead: (location: ReadingLocation) => void;
+  /** Saves (or, with empty text, deletes) the note on a verse range. */
+  saveVerseNote: (id: string, reference: string, text: string) => void;
+  setLastStudy: (location: StudyLocation) => void;
 
   logReadEngagement: () => void;
   logMemoryEngagement: () => void;
@@ -182,6 +205,9 @@ export const useAppStore = create<AppState>()(
 
       aiFreeQuestionsAskedToday: 0,
       aiFreeQuestionsAskedTodayDate: null,
+
+      verseNotes: {},
+      lastStudy: null,
 
       deletedCardIds: [],
       syncedUserId: null,
@@ -257,6 +283,21 @@ export const useAppStore = create<AppState>()(
       setTranslation: (translation) => set({ translation }),
 
       setLastRead: (location) => set({ lastRead: location }),
+
+      setLastStudy: (location) => set({ lastStudy: location }),
+
+      saveVerseNote: (id, reference, text) =>
+        set((state) => {
+          const trimmed = text.trim();
+          const existing = state.verseNotes[id];
+          if ((existing?.text ?? "") === trimmed) return state;
+          return {
+            verseNotes: {
+              ...state.verseNotes,
+              [id]: { text: trimmed, reference, updatedAt: Date.now() },
+            },
+          };
+        }),
 
       logReadEngagement: () => {
         const today = localDateString();

@@ -2,7 +2,6 @@ import { Link, Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   PanResponder,
@@ -15,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { StudyPanel, type OpenTarget, type StudyTab } from "../../../../components/read/study-panel";
 import { TranslationPill } from "../../../../components/read/translation-picker";
 import { serifFont } from "../../../../constants/fonts";
 import {
@@ -53,16 +53,51 @@ function neighbour(bookId: string, chapter: number, step: 1 | -1) {
 }
 
 export default function ChapterScreen() {
-  const { book: bookParam, chapter } = useLocalSearchParams<{ book: string; chapter: string }>();
+  const { book: bookParam, chapter, v, e, study } = useLocalSearchParams<{
+    book: string;
+    chapter: string;
+    /** Verse (and optional end verse) to select when the chapter opens. */
+    v?: string;
+    e?: string;
+    /** Opens the study panel on that verse: "1" (cross-references), "book" or "note". */
+    study?: string;
+  }>();
   const book = getBook(bookParam);
   const chapterNum = Number(chapter);
   if (!book || !Number.isInteger(chapterNum) || chapterNum < 1 || chapterNum > book.chapters) {
     return <Redirect href="/read" />;
   }
-  return <ChapterReader key={`${book.id}-${chapterNum}`} bookId={book.id} chapterNum={chapterNum} />;
+  const verse = Number(v);
+  const endVerse = Number(e);
+  const initial =
+    Number.isInteger(verse) && verse > 0
+      ? { anchor: verse, focus: Number.isInteger(endVerse) && endVerse >= verse ? endVerse : verse }
+      : null;
+  return (
+    <ChapterReader
+      key={`${book.id}-${chapterNum}-${v ?? ""}-${e ?? ""}`}
+      bookId={book.id}
+      chapterNum={chapterNum}
+      initialSelection={initial}
+      openStudy={!!study && !!initial}
+      studyTab={study === "book" ? "book" : study === "note" ? "note" : "connections"}
+    />
+  );
 }
 
-function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: number }) {
+function ChapterReader({
+  bookId,
+  chapterNum,
+  initialSelection,
+  openStudy,
+  studyTab,
+}: {
+  bookId: string;
+  chapterNum: number;
+  initialSelection: { anchor: number; focus: number } | null;
+  openStudy: boolean;
+  studyTab: StudyTab;
+}) {
   const router = useRouter();
   const book = getBook(bookId)!;
   const translation = useAppStore((state) => state.translation);
@@ -106,8 +141,40 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
 
   // `anchor` is the first verse tapped; `focus` is the most recently tapped verse.
   // The selected range is always [min(anchor, focus), max(anchor, focus)].
-  const [selection, setSelection] = useState<{ anchor: number; focus: number } | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selection, setSelection] = useState<{ anchor: number; focus: number } | null>(initialSelection);
+  const [sheetOpen, setSheetOpen] = useState(openStudy);
+
+  const verseNotes = useAppStore((state) => state.verseNotes);
+  const setLastStudy = useAppStore((state) => state.setLastStudy);
+  const studyStart = selection ? Math.min(selection.anchor, selection.focus) : null;
+  const studyEnd = selection ? Math.max(selection.anchor, selection.focus) : null;
+  useEffect(() => {
+    if (sheetOpen && studyStart !== null && studyEnd !== null) {
+      setLastStudy({ book: bookId, chapter: chapterNum, start: studyStart, end: studyEnd });
+    }
+  }, [sheetOpen, studyStart, studyEnd, bookId, chapterNum, setLastStudy]);
+  const notedRanges = useMemo(
+    () =>
+      Object.entries(verseNotes)
+        .filter(([, note]) => note.text)
+        .map(([id]) => parseVerseRangeId(id))
+        .filter((r) => r !== null && r.book === bookId && r.chapter === chapterNum),
+    [verseNotes, bookId, chapterNum]
+  );
+
+  // Bring a linked verse into view. Verses flow as one paragraph, so this estimates its position
+  // from how far through the chapter it is, then leaves a little room above it.
+  const scrollRef = useRef<ScrollView>(null);
+  const textTopRef = useRef(0);
+  const scrolledRef = useRef(false);
+  const scrollToInitialVerse = (textHeight: number) => {
+    if (scrolledRef.current || !initialSelection || chapterData.verses.length === 0) return;
+    scrolledRef.current = true;
+    const lastVerse = chapterData.verses[chapterData.verses.length - 1].verse;
+    const fraction = (initialSelection.anchor - 1) / Math.max(1, lastVerse);
+    const y = textTopRef.current + textHeight * fraction - 140;
+    if (y > 80) setTimeout(() => scrollRef.current?.scrollTo({ y, animated: true }), 50);
+  };
 
   const savedRanges = useMemo(
     () =>
@@ -169,7 +236,7 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
       : null;
   const isInDeck = cardId ? memoryDeck.some((c) => c.id === cardId) : false;
 
-  const goToAI = (autoAsk?: "insights") => {
+  const goToAI = (autoAsk?: "insights", question?: string) => {
     clearSelection();
     router.push({
       pathname: "/ai",
@@ -178,11 +245,26 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
         verseText: selectedText,
         translation,
         ...(autoAsk ? { autoAsk } : {}),
+        ...(question ? { question } : {}),
       },
     });
   };
 
-  const toggleMemoryDeck = () => {
+  const openPassage = (target: OpenTarget) => {
+    setSheetOpen(false);
+    router.push({
+      pathname: "/read/[book]/[chapter]",
+      params: {
+        book: target.bookId,
+        chapter: String(target.chapter),
+        v: String(target.verse),
+        ...(target.endVerse && target.endVerse !== target.verse ? { e: String(target.endVerse) } : {}),
+        ...(target.study ? { study: target.study } : {}),
+      },
+    });
+  };
+
+  const toggleMemoryDeck = (keepSelection = false) => {
     if (!cardId) return;
     if (isInDeck) {
       removeFromMemoryDeck(cardId);
@@ -194,7 +276,7 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
         translation,
       });
     }
-    clearSelection();
+    if (!keepSelection) clearSelection();
   };
 
   return (
@@ -233,6 +315,7 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
@@ -252,7 +335,7 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
             {chapterData.title}
           </Text>
         ) : null}
-        <View className="h-4" />
+        <View className="h-4" onLayout={(ev) => (textTopRef.current = ev.nativeEvent.layout.y)} />
         {chapterData.loading ? (
           <View className="py-16 items-center">
             <ActivityIndicator color="#4A6FA5" />
@@ -274,8 +357,10 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
         <Text
           style={{ fontFamily: serifFont }}
           className="text-lg leading-8 text-gray-900 dark:text-gray-100"
+          onLayout={(ev) => scrollToInitialVerse(ev.nativeEvent.layout.height)}
         >
           {chapterData.verses.map((v) => {
+            const noted = notedRanges.some((r) => r && v.verse === r.end);
             const saved = savedRanges.some((r) => r && v.verse >= r.start && v.verse <= r.end);
             const inSelection =
               rangeStart !== null && rangeEnd !== null && v.verse >= rangeStart && v.verse <= rangeEnd;
@@ -292,7 +377,12 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
                 }
               >
                 <Text className="text-xs font-bold text-brand-earth">{v.verse} </Text>
-                {v.text}{" "}
+                {v.text}
+                {noted ? (
+                  <Text accessibilityLabel="You have a note here" className="text-xs text-brand-blue">
+                    {" "}✎
+                  </Text>
+                ) : null}{" "}
               </Text>
             );
           })}
@@ -323,11 +413,11 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
             <Text className="text-sm font-semibold text-brand-blue" numberOfLines={1}>
               {verseReference}
             </Text>
-            <Text className="text-[10px] text-gray-400 dark:text-gray-500">Swipe up for more</Text>
+            <Text className="text-[10px] text-gray-400 dark:text-gray-500" numberOfLines={1}>Cross-refs, book intro, notes</Text>
           </Pressable>
           <View className="flex-row" style={{ gap: 4 }}>
             <Pressable
-              onPress={toggleMemoryDeck}
+              onPress={() => toggleMemoryDeck()}
               hitSlop={8}
               className="p-2 active:opacity-60"
               accessibilityLabel={isInDeck ? "Remove from Memory Deck" : "Add to Memory Deck"}
@@ -357,10 +447,12 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
             <Pressable
               onPress={() => setSheetOpen(true)}
               hitSlop={8}
-              className="p-2 active:opacity-60"
-              accessibilityLabel="More options"
+              className="flex-row items-center rounded-full px-3 py-1.5 ml-1 active:opacity-70"
+              style={{ backgroundColor: "#4A6FA5" }}
+              accessibilityLabel="Study this verse"
             >
-              <Ionicons name="chevron-up" size={20} color="#9CA3AF" />
+              <Ionicons name="school-outline" size={15} color="#FFFFFF" />
+              <Text className="text-xs font-semibold text-white ml-1">Study</Text>
             </Pressable>
           </View>
         </View>
@@ -403,75 +495,26 @@ function ChapterReader({ bookId, chapterNum }: { bookId: string; chapterNum: num
         </View>
       )}
 
-      <Modal
-        visible={sheetOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSheetOpen(false)}
-      >
-        <Pressable
-          className="flex-1 justify-end"
-          style={{ backgroundColor: "#00000066" }}
-          onPress={() => setSheetOpen(false)}
-        >
-          <Pressable
-            className="bg-white dark:bg-gray-900 rounded-t-3xl px-6 pt-6"
-            style={{ paddingBottom: 36 }}
-          >
-            {selection && (
-              <>
-                <Text className="text-sm font-semibold text-brand-blue mb-2">{verseReference}</Text>
-                <Text
-                  style={{ fontFamily: serifFont }}
-                  className="text-base leading-7 text-gray-900 dark:text-gray-100 mb-6"
-                >
-                  “{selectedText}”
-                </Text>
-                <View className="flex-row mb-3" style={{ gap: 8 }}>
-                  <Pressable
-                    onPress={() => goToAI("insights")}
-                    className="flex-1 flex-row items-center justify-center rounded-2xl py-3 active:opacity-70"
-                    style={{ backgroundColor: "#4A6FA51A", borderWidth: 1, borderColor: "#4A6FA540" }}
-                  >
-                    <Ionicons name="sparkles" size={16} color="#4A6FA5" />
-                    <Text className="text-sm font-semibold text-brand-blue ml-1.5">
-                      Get Insights
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => goToAI()}
-                    className="flex-1 flex-row items-center justify-center rounded-2xl py-3 active:opacity-70"
-                    style={{ backgroundColor: "#4A6FA51A", borderWidth: 1, borderColor: "#4A6FA540" }}
-                  >
-                    <Ionicons name="chatbubble-ellipses" size={16} color="#4A6FA5" />
-                    <Text className="text-sm font-semibold text-brand-blue ml-1.5">Ask AI</Text>
-                  </Pressable>
-                </View>
-                <Pressable
-                  onPress={toggleMemoryDeck}
-                  className="rounded-2xl py-4 items-center mb-3 active:opacity-80"
-                  style={{ backgroundColor: isInDeck ? "#DC262615" : "#4A6FA5" }}
-                >
-                  <Text
-                    className="text-base font-semibold"
-                    style={{ color: isInDeck ? "#DC2626" : "#FFFFFF" }}
-                  >
-                    {isInDeck ? "Remove from Memory Deck" : "Add to Memory Deck"}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setSheetOpen(false)}
-                  className="items-center py-2 active:opacity-60"
-                >
-                  <Text className="text-sm font-medium text-gray-400 dark:text-gray-500">
-                    Cancel
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {selection && cardId && rangeStart !== null && rangeEnd !== null && (
+        <StudyPanel
+          visible={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          bookId={bookId}
+          chapter={chapterNum}
+          start={rangeStart}
+          end={rangeEnd}
+          noteId={cardId}
+          reference={verseReference}
+          text={selectedText}
+          translation={translation}
+          isInDeck={isInDeck}
+          onToggleDeck={() => toggleMemoryDeck(true)}
+          onInsights={() => goToAI("insights")}
+          onAsk={(question) => goToAI(undefined, question)}
+          onOpen={openPassage}
+          initialTab={studyTab}
+        />
+      )}
     </SafeAreaView>
   );
 }
