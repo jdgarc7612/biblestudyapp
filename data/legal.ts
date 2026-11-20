@@ -1,23 +1,20 @@
 /**
  * Privacy Policy and Terms of Use, in plain language.
  *
- * DRAFT for Josh's review (Nov 20, 2026), written by Claude to match what the app actually does
- * today. This is not legal advice. Before a public launch, have someone qualified look it over,
+ * Written Nov 20, 2026 to match what the app actually does today. This is not legal advice. Before a public launch, have someone qualified look it over,
  * and update it whenever the app starts collecting something new (subscriptions, analytics,
  * sharing answers publicly).
  *
- * To finish:
- *  - CONTACT_EMAIL: add a real address (until then the pages point people to Send feedback).
- *  - OPERATOR: who runs DeepWord (your name or business, and state).
- *  - Set LEGAL_DRAFT to false once you've reviewed both pages.
+ * CONTACT_EMAIL is temporary (Cornerstone & Ink) until the app has its own name and address.
+ * Set LEGAL_DRAFT back to true to show the Draft badge while making big changes.
  */
 
-export const LEGAL_DRAFT = true;
+export const LEGAL_DRAFT = false;
 export const LEGAL_UPDATED = "November 20, 2026";
-/** e.g. "hello@deepword.app". Empty until Josh sets one up. */
-export const CONTACT_EMAIL = "";
-/** e.g. "Josh Garcia, Lubbock, Texas". Empty until Josh decides. */
-export const OPERATOR = "";
+/** Temporary until the app has its own address. */
+export const CONTACT_EMAIL = "cornerstoneandink@gmail.com";
+/** Who runs DeepWord. */
+export const OPERATOR = "Josh Garcia";
 
 export interface LegalSection {
   heading: string;
