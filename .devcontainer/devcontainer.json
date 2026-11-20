@@ -1,7 +1,7 @@
 // Lets anyone try the app in the browser without installing anything:
 // on GitHub, Code > Codespaces > Create codespace on this branch. The app opens in a new tab.
 {
-  "name": "DeepWord preview",
+  "name": "Omeora preview",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
   "hostRequirements": { "cpus": 2 },
   "postCreateCommand": "npm ci",
@@ -9,6 +9,6 @@
   "postAttachCommand": "CI=1 npx expo start --web --port 8081",
   "forwardPorts": [8081],
   "portsAttributes": {
-    "8081": { "label": "DeepWord app", "onAutoForward": "openBrowser" }
+    "8081": { "label": "Omeora app", "onAutoForward": "openBrowser" }
   }
 }

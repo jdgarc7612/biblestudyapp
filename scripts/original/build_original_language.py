@@ -1,4 +1,4 @@
-"""Build DeepWord's original-language data (Hebrew/Greek word insight).
+"""Build Omeora's original-language data (Hebrew/Greek word insight).
 
 Usage:
   python3 -I scripts/original/build_original_language.py BSB_TABLES.xlsx TBESH.txt TBESG.txt

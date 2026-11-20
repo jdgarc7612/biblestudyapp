@@ -1,4 +1,4 @@
--- DeepWord accounts: run this once in your Supabase project (SQL Editor -> New query -> Run).
+-- Omeora accounts: run this once in your Supabase project (SQL Editor -> New query -> Run).
 -- Safe to run again; it only adds what's missing and updates the functions.
 
 -- Each account's synced progress: one small JSON copy of what the app saves on the device.

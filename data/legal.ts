@@ -13,7 +13,7 @@ export const LEGAL_DRAFT = false;
 export const LEGAL_UPDATED = "November 20, 2026";
 /** Temporary until the app has its own address. */
 export const CONTACT_EMAIL = "cornerstoneandink@gmail.com";
-/** Who runs DeepWord. */
+/** Who runs Omeora. */
 export const OPERATOR = "Josh Garcia";
 
 export interface LegalSection {
@@ -31,11 +31,11 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "The short version",
     body: [
-      "DeepWord is a Bible study app. We collect as little as we can, we never sell your information, and there are no ads or tracking. If you don't make an account, your study stays on your device.",
+      "Omeora is a Bible study app. We collect as little as we can, we never sell your information, and there are no ads or tracking. If you don't make an account, your study stays on your device.",
     ],
   },
   {
-    heading: "If you use DeepWord without an account",
+    heading: "If you use Omeora without an account",
     body: [
       "Your reading progress, notes, guided study answers, memory verses, streaks and Ask AI conversations are saved only on your device (or in your browser). We can't see them. Clearing the app's data or your browser's site data erases them.",
     ],
@@ -67,12 +67,12 @@ export const PRIVACY: LegalSection[] = [
     ],
   },
   {
-    heading: "Who helps us run DeepWord",
+    heading: "Who helps us run Omeora",
     body: [
       "• Supabase stores accounts, synced study and feedback.",
       "• Cloudflare runs our Ask AI server. It sees your IP address, which we use only to slow down floods of requests.",
       "• Anthropic writes Ask AI answers.",
-      "• GitHub hosts the DeepWord website.",
+      "• GitHub hosts the Omeora website.",
       "• Apple and Google, only if you choose to sign in with them.",
       "Each of them handles data under its own privacy policy. We don't share your information with anyone else, and we never sell it.",
     ],
@@ -86,7 +86,7 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "Children",
     body: [
-      "DeepWord isn't designed for children under 13, and we don't knowingly collect information from them. If you believe a child has made an account, contact us and we'll delete it.",
+      "Omeora isn't designed for children under 13, and we don't knowingly collect information from them. If you believe a child has made an account, contact us and we'll delete it.",
     ],
   },
   {
@@ -102,35 +102,35 @@ export const TERMS: LegalSection[] = [
   {
     heading: "Welcome",
     body: [
-      "These terms cover your use of DeepWord, the Bible study app and website. By using DeepWord you agree to them. If you don't agree, please don't use the app.",
+      "These terms cover your use of Omeora, the Bible study app and website. By using Omeora you agree to them. If you don't agree, please don't use the app.",
     ],
   },
   {
     heading: "A study aid, not a replacement",
     body: [
-      "DeepWord is meant to help you read, study and understand the Bible. Scripture itself is the final word. DeepWord isn't a substitute for your church, your pastor, or professional counsel for medical, legal, financial or mental health needs.",
+      "Omeora is meant to help you read, study and understand the Bible. Scripture itself is the final word. Omeora isn't a substitute for your church, your pastor, or professional counsel for medical, legal, financial or mental health needs.",
     ],
   },
   {
     heading: "About Ask AI",
     body: [
       "Ask AI answers are written by an AI model. They aim to be faithful to Scripture, but they can be incomplete or wrong. Check what you read against the Bible, and talk to your pastor about anything that matters.",
-      "Free accounts get a limited number of questions each day. We may change limits or features as DeepWord grows.",
+      "Free accounts get a limited number of questions each day. We may change limits or features as Omeora grows.",
     ],
   },
   {
     heading: "Your account and your content",
     body: [
       "Keep your sign-in secure and use an email you control. You're responsible for what happens under your account.",
-      "Your notes and answers belong to you. You let us store and sync them only so DeepWord can show them back to you. Today everything you write is private to you.",
+      "Your notes and answers belong to you. You let us store and sync them only so Omeora can show them back to you. Today everything you write is private to you.",
     ],
   },
   {
     heading: "Please don't",
     body: [
-      "• misuse or try to break DeepWord, its servers or its limits",
+      "• misuse or try to break Omeora, its servers or its limits",
       "• use Ask AI to create anything harmful, hateful or unlawful",
-      "• copy DeepWord's own study content (book introductions, notes, plans) to sell or republish",
+      "• copy Omeora's own study content (book introductions, notes, plans) to sell or republish",
       "We may suspend accounts that do these things.",
     ],
   },
@@ -143,13 +143,13 @@ export const TERMS: LegalSection[] = [
   {
     heading: "No guarantees",
     body: [
-      "We work hard to keep DeepWord accurate and available, but it's provided as it is, without warranties. As far as the law allows, we aren't liable for losses that come from using it. Keeping an account means your study is backed up, but please keep your own copy of anything you can't lose.",
+      "We work hard to keep Omeora accurate and available, but it's provided as it is, without warranties. As far as the law allows, we aren't liable for losses that come from using it. Keeping an account means your study is backed up, but please keep your own copy of anything you can't lose.",
     ],
   },
   {
     heading: "Changes and contact",
     body: [
-      "We may update these terms. When we do, we'll change the date at the top, and tell you in the app for anything significant. Using DeepWord after a change means you accept it. You can stop using DeepWord and delete your account anytime.",
+      "We may update these terms. When we do, we'll change the date at the top, and tell you in the app for anything significant. Using Omeora after a change means you accept it. You can stop using Omeora and delete your account anytime.",
       contactLine(),
     ],
   },

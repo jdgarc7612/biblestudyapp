@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build DeepWord's cross-reference files from the OpenBible.info dataset.
+Build Omeora's cross-reference files from the OpenBible.info dataset.
 
 Usage (run from the repo root; standard library only):
 
