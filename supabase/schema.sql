@@ -111,3 +111,30 @@ revoke execute on function public.delete_my_account() from public, anon;
 grant execute on function public.ai_questions_used(date) to authenticated;
 grant execute on function public.record_ai_question(date) to authenticated;
 grant execute on function public.delete_my_account() to authenticated;
+
+-- Feedback from testers and readers (Profile -> Send feedback). Anyone can send one, signed in
+-- or not; nobody can read them back through the app. Read them in the dashboard
+-- (Table Editor -> feedback). Feedback linked to an account is deleted with the account.
+create table if not exists public.feedback (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  user_id uuid default auth.uid() references auth.users (id) on delete cascade,
+  kind text not null default 'other'
+    check (kind in ('confusing', 'broken', 'idea', 'love', 'other')),
+  message text not null check (char_length(message) between 1 and 4000),
+  reply_email text check (char_length(reply_email) <= 200),
+  screen text check (char_length(screen) <= 200),
+  app_version text check (char_length(app_version) <= 40),
+  platform text check (char_length(platform) <= 40)
+);
+
+alter table public.feedback enable row level security;
+revoke all on public.feedback from anon, authenticated;
+-- The app may only add rows, and only these columns; user_id always comes from the sign-in.
+grant insert (kind, message, reply_email, screen, app_version, platform)
+  on public.feedback to anon, authenticated;
+
+drop policy if exists "Send feedback" on public.feedback;
+create policy "Send feedback" on public.feedback
+  for insert to anon, authenticated
+  with check (user_id is not distinct from (select auth.uid()));

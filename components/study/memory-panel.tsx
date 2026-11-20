@@ -1,8 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAppStore, StudyMode, TypeSubMode } from "../../store/useAppStore";
 import { daysUntilDue, Difficulty, isDue } from "../../lib/srs";
@@ -46,7 +45,8 @@ function dueLabel(card: { repetitions: number; dueDate: string }) {
   return `Due in ${days} ${days === 1 ? "day" : "days"}`;
 }
 
-export default function MemoryScreen() {
+/** The Memory side of the Study tab: review, study method, difficulty and the deck. */
+export function MemoryPanel() {
   const router = useRouter();
   const memoryDeck = useAppStore((state) => state.memoryDeck);
   const studyMode = useAppStore((state) => state.studyMode);
@@ -65,8 +65,7 @@ export default function MemoryScreen() {
 
   if (memoryDeck.length === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
-        <View className="flex-1 items-center justify-center px-10">
+      <View className="items-center px-6 pt-10 pb-6">
           <View className="w-16 h-16 rounded-full bg-brand-earth/15 items-center justify-center mb-5">
             <Ionicons name="albums" size={28} color="#C19A6B" />
           </View>
@@ -77,21 +76,13 @@ export default function MemoryScreen() {
             While reading, tap any verse and choose “Add to Memory Deck” to start building your
             collection.
           </Text>
-        </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text className="text-3xl font-bold text-gray-900 dark:text-white mt-1 mb-1">
-          Memory
-        </Text>
-        <Text className="text-base text-gray-400 dark:text-gray-500 mb-6">
+    <View>
+        <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           {dueCount > 0
             ? `${dueCount} ${dueCount === 1 ? "verse" : "verses"} due today`
             : "All caught up — nothing due today"}
@@ -120,12 +111,10 @@ export default function MemoryScreen() {
                   setStudyMode(mode);
                   if (isType) setSheetOpen(true);
                 }}
-                className="flex-row items-center rounded-2xl px-4 py-3 active:opacity-80"
-                style={{
-                  backgroundColor: active ? "#4A6FA51A" : "transparent",
-                  borderWidth: 1,
-                  borderColor: active ? "#4A6FA5" : "#E5E7EB",
-                }}
+                className={`flex-row items-center rounded-2xl px-4 py-3 active:opacity-80 border ${
+                  active ? "" : "border-gray-200 dark:border-gray-700"
+                }`}
+                style={active ? { backgroundColor: "#4A6FA51A", borderColor: "#4A6FA5" } : undefined}
               >
                 <View className="flex-1">
                   <Text
@@ -212,7 +201,6 @@ export default function MemoryScreen() {
             </View>
           ))}
         </View>
-      </ScrollView>
 
       <Modal
         visible={sheetOpen}
@@ -270,6 +258,6 @@ export default function MemoryScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }

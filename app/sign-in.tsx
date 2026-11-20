@@ -207,6 +207,18 @@ export default function SignInScreen() {
                 </>
               )}
 
+              <Text className="text-xs text-gray-400 dark:text-gray-500 mt-6 leading-5 text-center">
+                By continuing, you agree to the{" "}
+                <Text className="text-brand-blue" onPress={() => router.push("/terms")}>
+                  Terms of Use
+                </Text>{" "}
+                and{" "}
+                <Text className="text-brand-blue" onPress={() => router.push("/privacy")}>
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+
               {error && (
                 <View className="flex-row items-start mt-5 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20">
                   <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />

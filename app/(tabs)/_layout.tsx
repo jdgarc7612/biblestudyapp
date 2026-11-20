@@ -1,6 +1,8 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, useColorScheme } from "react-native";
+import { Platform } from "react-native";
+
+import { useColorScheme } from "../../hooks/use-color-scheme";
 
 const COLORS = {
   active: "#4A6FA5", // soft blue
@@ -51,11 +53,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="memory"
+        name="study"
         options={{
-          title: "Memory",
+          title: "Study",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="albums" size={size} color={color} />
+            <Ionicons name="library" size={size} color={color} />
           ),
         }}
       />
