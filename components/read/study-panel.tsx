@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { serifFont } from "../../constants/fonts";
 import { getBookIntro } from "../../data/study/book-intros";
+import { contextNoteFor, type ContextNote } from "../../data/study/context-notes";
 import { formatReference, getBook, type TranslationId } from "../../lib/bible";
 import { notesCovering } from "../../lib/notes";
 import {
@@ -23,20 +24,23 @@ import {
   type CrossReference,
 } from "../../lib/cross-references";
 import { useAppStore } from "../../store/useAppStore";
+import { WordStudy } from "./word-study";
 
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
 const SHOWN_AT_FIRST = 5;
 
-export type StudyTab = "connections" | "book" | "note";
+export type StudyTab = "words" | "connections" | "book" | "note";
 
 export interface OpenTarget {
   bookId: string;
   chapter: number;
   verse: number;
   endVerse?: number;
-  /** Open the study panel there too: "1" (cross-references), "book" or "note". */
-  study?: "1" | "book" | "note";
+  /** Open the study panel there too: "words", "1" (cross-references), "book" or "note". */
+  study?: "words" | "1" | "book" | "note";
+  /** With study "words": the Strong's number of the word to open on. */
+  word?: number;
 }
 
 interface Props {
@@ -56,24 +60,27 @@ interface Props {
   onAsk: (question?: string) => void;
   onOpen: (target: OpenTarget) => void;
   initialTab?: StudyTab;
+  initialWord?: number;
 }
 
 /** The Reader's study panel: the verse, quick actions, and three ways to go deeper. */
 export function StudyPanel(props: Props) {
   const { height } = useWindowDimensions();
-  const [tab, setTab] = useState<StudyTab>(props.initialTab ?? "connections");
+  const [tab, setTab] = useState<StudyTab>(props.initialTab ?? "words");
   const book = getBook(props.bookId)!;
   const intro = getBookIntro(props.bookId);
   const verseNotes = useAppStore((s) => s.verseNotes);
   const noteCount = notesCovering(verseNotes, props.bookId, props.chapter, props.start, props.end).length;
 
   useEffect(() => {
-    if (props.visible) setTab(props.initialTab ?? "connections");
+    if (props.visible) setTab(props.initialTab ?? "words");
   }, [props.visible, props.initialTab]);
 
+  const contextNote = contextNoteFor(props.bookId, props.chapter, props.start, props.end);
   const tabs: { id: StudyTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { id: "words", label: book.testament === "NT" ? "Greek" : "Hebrew", icon: "language-outline" },
     { id: "connections", label: "Cross-refs", icon: "git-network-outline" },
-    { id: "book", label: `About ${book.short}`, icon: "library-outline" },
+    { id: "book", label: "Context", icon: "compass-outline" },
     { id: "note", label: noteCount ? `Notes · ${noteCount}` : "Notes", icon: "create-outline" },
   ];
 
@@ -114,7 +121,7 @@ export function StudyPanel(props: Props) {
               <Text
                 style={{ fontFamily: serifFont }}
                 className="text-base leading-7 text-gray-800 dark:text-gray-200 mb-5"
-                numberOfLines={8}
+                numberOfLines={tab === "words" ? 2 : 8}
               >
                 “{props.text}”
               </Text>
@@ -161,6 +168,19 @@ export function StudyPanel(props: Props) {
                 })}
               </View>
 
+              {tab === "words" && (
+                <WordStudy
+                  bookId={props.bookId}
+                  chapter={props.chapter}
+                  start={props.start}
+                  end={props.end}
+                  reference={props.reference}
+                  translation={props.translation}
+                  initialWord={props.initialWord}
+                  onOpen={props.onOpen}
+                  onAsk={props.onAsk}
+                />
+              )}
               {tab === "connections" && (
                 <CrossReferences
                   bookId={props.bookId}
@@ -173,8 +193,12 @@ export function StudyPanel(props: Props) {
                   onAsk={props.onAsk}
                 />
               )}
+              {tab === "book" && contextNote && (
+                <ContextNoteView note={contextNote} reference={props.reference} onAsk={props.onAsk} onWord={(v, s) => props.onOpen({ bookId: props.bookId, chapter: props.chapter, verse: v, study: "words", word: s })} />
+              )}
               {tab === "book" && intro && (
                 <BookIntroView
+                  showHeading={!!contextNote}
                   bookId={props.bookId}
                   onOpen={props.onOpen}
                   onAsk={props.onAsk}
@@ -339,11 +363,62 @@ function CrossReferenceRow({
   );
 }
 
+function ContextNoteView({
+  note,
+  reference,
+  onAsk,
+  onWord,
+}: {
+  note: ContextNote;
+  reference: string;
+  onAsk: (question?: string) => void;
+  onWord: (verse: number, strongs: number) => void;
+}) {
+  return (
+    <View className="mb-6">
+      <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">
+        Setting
+      </Text>
+      <Text style={{ fontFamily: serifFont }} className="text-xl leading-8 text-gray-900 dark:text-white mb-2">
+        {note.title}
+      </Text>
+      <Text className="text-[15px] leading-6 text-gray-600 dark:text-gray-300 mb-4">{note.setting}</Text>
+      {note.words.length > 0 && (
+        <View className="flex-row flex-wrap mb-4" style={{ gap: 6 }}>
+          {note.words.map((w) => (
+            <Pressable
+              key={`${w.v}-${w.s}`}
+              onPress={() => onWord(w.v, w.s)}
+              className="flex-row items-center rounded-full px-3 py-1.5 active:opacity-70"
+              style={{ backgroundColor: `${EARTH}22` }}
+            >
+              <Ionicons name="language-outline" size={12} color="#8A6A44" />
+              <Text className="text-xs font-semibold ml-1" style={{ color: "#8A6A44" }}>
+                {w.note.split(",")[0].split(" ")[0]} · v. {w.v}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      <Pressable
+        onPress={() => onAsk(`What was the historical and cultural setting of ${reference}, and how does it help me understand the passage?`)}
+        className="flex-row items-center justify-center rounded-2xl py-3 active:opacity-70"
+        style={{ backgroundColor: `${BLUE}12` }}
+      >
+        <Ionicons name="sparkles" size={14} color={BLUE} />
+        <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300 ml-1.5">Ask more about the setting</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function BookIntroView({
   bookId,
   onOpen,
   onAsk,
+  showHeading,
 }: {
+  showHeading?: boolean;
   bookId: string;
   onOpen: (t: OpenTarget) => void;
   onAsk: (question?: string) => void;
@@ -358,6 +433,11 @@ function BookIntroView({
   ];
   return (
     <View>
+      {showHeading ? (
+        <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1 pt-5 border-t border-gray-100 dark:border-gray-800">
+          About {book.name}
+        </Text>
+      ) : null}
       <Text
         style={{ fontFamily: serifFont }}
         className="text-xl leading-8 text-gray-900 dark:text-white mb-3"

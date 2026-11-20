@@ -15,7 +15,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { StudyPanel, type OpenTarget, type StudyTab } from "../../../../components/read/study-panel";
+import { SettingCard } from "../../../../components/read/setting-card";
 import { TranslationPill } from "../../../../components/read/translation-picker";
+import { contextNoteForChapter } from "../../../../data/study/context-notes";
 import { serifFont } from "../../../../constants/fonts";
 import {
   BOOKS,
@@ -53,14 +55,16 @@ function neighbour(bookId: string, chapter: number, step: 1 | -1) {
 }
 
 export default function ChapterScreen() {
-  const { book: bookParam, chapter, v, e, study } = useLocalSearchParams<{
+  const { book: bookParam, chapter, v, e, study, w } = useLocalSearchParams<{
     book: string;
     chapter: string;
     /** Verse (and optional end verse) to select when the chapter opens. */
     v?: string;
     e?: string;
-    /** Opens the study panel on that verse: "1" (cross-references), "book" or "note". */
+    /** Opens the study panel on that verse: "words", "1" (cross-references), "book" or "note". */
     study?: string;
+    /** With study=words: the Strong's number of the word to open on. */
+    w?: string;
   }>();
   const book = getBook(bookParam);
   const chapterNum = Number(chapter);
@@ -80,7 +84,8 @@ export default function ChapterScreen() {
       chapterNum={chapterNum}
       initialSelection={initial}
       openStudy={!!study && !!initial}
-      studyTab={study === "book" ? "book" : study === "note" ? "note" : "connections"}
+      studyTab={study === "book" ? "book" : study === "note" ? "note" : study === "1" ? "connections" : "words"}
+      initialWord={Number(w) > 0 ? Number(w) : undefined}
     />
   );
 }
@@ -90,19 +95,22 @@ function ChapterReader({
   chapterNum,
   initialSelection,
   openStudy,
-  studyTab,
+  studyTab: routeTab,
+  initialWord: routeWord,
 }: {
   bookId: string;
   chapterNum: number;
   initialSelection: { anchor: number; focus: number } | null;
   openStudy: boolean;
   studyTab: StudyTab;
+  initialWord?: number;
 }) {
   const router = useRouter();
   const book = getBook(bookId)!;
   const translation = useAppStore((state) => state.translation);
   const setLastRead = useAppStore((state) => state.setLastRead);
   const chapterData = useChapter(translation, bookId, chapterNum);
+  const contextNote = contextNoteForChapter(bookId, chapterNum);
 
   useEffect(() => {
     setLastRead({ book: bookId, chapter: chapterNum });
@@ -143,6 +151,18 @@ function ChapterReader({
   // The selected range is always [min(anchor, focus), max(anchor, focus)].
   const [selection, setSelection] = useState<{ anchor: number; focus: number } | null>(initialSelection);
   const [sheetOpen, setSheetOpen] = useState(openStudy);
+  // Which tab (and word) the study panel opens on. A context note's "word to notice" sets both.
+  const [studyTab, setStudyTab] = useState<StudyTab>(routeTab);
+  const [initialWord, setInitialWord] = useState<number | undefined>(routeWord);
+  const openStudyPanel = (tab: StudyTab = "words", word?: number) => {
+    setStudyTab(tab);
+    setInitialWord(word);
+    setSheetOpen(true);
+  };
+  const studyWord = (verseNum: number, word: number) => {
+    setSelection({ anchor: verseNum, focus: verseNum });
+    openStudyPanel("words", word);
+  };
 
   const verseNotes = useAppStore((state) => state.verseNotes);
   const setLastStudy = useAppStore((state) => state.setLastStudy);
@@ -260,6 +280,7 @@ function ChapterReader({
         v: String(target.verse),
         ...(target.endVerse && target.endVerse !== target.verse ? { e: String(target.endVerse) } : {}),
         ...(target.study ? { study: target.study } : {}),
+        ...(target.word ? { w: String(target.word) } : {}),
       },
     });
   };
@@ -335,6 +356,7 @@ function ChapterReader({
             {chapterData.title}
           </Text>
         ) : null}
+        {contextNote ? <SettingCard note={contextNote} bookId={bookId} onWord={studyWord} /> : null}
         <View className="h-4" onLayout={(ev) => (textTopRef.current = ev.nativeEvent.layout.y)} />
         {chapterData.loading ? (
           <View className="py-16 items-center">
@@ -409,11 +431,11 @@ function ChapterReader({
           >
             <Ionicons name="close" size={20} color="#9CA3AF" />
           </Pressable>
-          <Pressable onPress={() => setSheetOpen(true)} className="flex-1 active:opacity-70">
+          <Pressable onPress={() => openStudyPanel()} className="flex-1 active:opacity-70">
             <Text className="text-sm font-semibold text-brand-blue" numberOfLines={1}>
               {verseReference}
             </Text>
-            <Text className="text-[10px] text-gray-400 dark:text-gray-500" numberOfLines={1}>Cross-refs, book intro, notes</Text>
+            <Text className="text-[10px] text-gray-400 dark:text-gray-500" numberOfLines={1}>Original words, cross-refs, context, notes</Text>
           </Pressable>
           <View className="flex-row" style={{ gap: 4 }}>
             <Pressable
@@ -445,7 +467,7 @@ function ChapterReader({
               <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4A6FA5" />
             </Pressable>
             <Pressable
-              onPress={() => setSheetOpen(true)}
+              onPress={() => openStudyPanel()}
               hitSlop={8}
               className="flex-row items-center rounded-full px-3 py-1.5 ml-1 active:opacity-70"
               style={{ backgroundColor: "#4A6FA5" }}
@@ -513,6 +535,7 @@ function ChapterReader({
           onAsk={(question) => goToAI(undefined, question)}
           onOpen={openPassage}
           initialTab={studyTab}
+          initialWord={initialWord}
         />
       )}
     </SafeAreaView>
