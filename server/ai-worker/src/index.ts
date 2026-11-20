@@ -1,5 +1,5 @@
 /**
- * DeepWord study companion endpoint.
+ * Omeora study companion endpoint.
  *
  * POST /ask  { question, verse?: { reference, text }, translation?, history?: [{ role, content }] }
  *   Optional headers for signed-in readers: Authorization: Bearer <Supabase access token>,

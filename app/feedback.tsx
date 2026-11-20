@@ -65,7 +65,7 @@ export default function FeedbackScreen() {
                 Thank you
               </Text>
               <Text className="text-base text-gray-500 dark:text-gray-400 leading-6 text-center mb-8">
-                Every note helps make DeepWord better. Send another anytime from Profile.
+                Every note helps make Omeora better. Send another anytime from Profile.
               </Text>
               <Pressable
                 onPress={close}
@@ -117,7 +117,7 @@ export default function FeedbackScreen() {
                   kind === "broken"
                     ? "What happened, and what did you expect?"
                     : kind === "idea"
-                      ? "What would make DeepWord more useful to you?"
+                      ? "What would make Omeora more useful to you?"
                       : kind === "love"
                         ? "What do you love about it?"
                         : "What was confusing, and where?"

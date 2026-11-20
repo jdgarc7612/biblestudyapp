@@ -160,7 +160,7 @@ export default function ShopScreen() {
           style={{ opacity: 0.5 }}
         >
           <Text className="text-sm font-semibold text-gray-400 dark:text-gray-500">
-            Support DeepWord — coming soon
+            Support Omeora — coming soon
           </Text>
         </Pressable>
       </ScrollView>

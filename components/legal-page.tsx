@@ -32,7 +32,7 @@ export function LegalPage({ title, sections }: { title: string; sections: LegalS
           )}
           <Text className="text-sm text-gray-400 dark:text-gray-500">
             Last updated {LEGAL_UPDATED}
-            {OPERATOR ? ` · DeepWord is run by ${OPERATOR}` : ""}
+            {OPERATOR ? ` · Omeora is run by ${OPERATOR}` : ""}
           </Text>
         </View>
 

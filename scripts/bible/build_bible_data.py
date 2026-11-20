@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build DeepWord's Bible text files from public-domain source files.
+Build Omeora's Bible text files from public-domain source files.
 
 Usage (run from the repo root; uses only the Python standard library):
 

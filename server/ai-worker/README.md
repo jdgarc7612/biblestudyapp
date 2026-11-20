@@ -1,4 +1,4 @@
-# DeepWord study companion (AI endpoint)
+# Omeora study companion (AI endpoint)
 
 A small Cloudflare Worker that answers Ask AI questions with Claude (`claude-haiku-5-5`).
 The app sends the question (and the passage, if the person asked from the reader) to

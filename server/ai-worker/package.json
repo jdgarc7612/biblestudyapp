@@ -2,7 +2,7 @@
   "name": "deepword-ai-worker",
   "private": true,
   "version": "1.0.0",
-  "description": "DeepWord study companion endpoint (Cloudflare Worker that calls the Claude API).",
+  "description": "Omeora study companion endpoint (Cloudflare Worker that calls the Claude API).",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

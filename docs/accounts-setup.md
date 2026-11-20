@@ -1,6 +1,6 @@
 # Switching on accounts (no terminal needed)
 
-DeepWord's accounts run on **Supabase**: sign-in, plus one small saved copy of each person's
+Omeora's accounts run on **Supabase**: sign-in, plus one small saved copy of each person's
 progress. Until you do the steps below, the app works exactly as before, as a guest on each
 device, and the Profile page says accounts are coming soon.
 
@@ -31,7 +31,7 @@ People sign in by typing a 6-digit code from an email; there are no passwords to
    "Confirm email" on.
 2. **Authentication → Emails → Templates:** in both **Magic Link** and **Confirm signup**,
    replace the body with something like:
-   `Your DeepWord code is {{ .Token }}. It expires in an hour.`
+   `Your Omeora code is {{ .Token }}. It expires in an hour.`
    The `{{ .Token }}` part is the code; without it the email only has a link, which the app
    doesn't use.
 3. **Send emails from your own address.** Supabase's built-in sender only allows a few emails
@@ -40,7 +40,7 @@ People sign in by typing a 6-digit code from an email; there are no passwords to
    - In Resend, add and verify a domain you own, then create an API key with "Sending access".
    - In Supabase, **Authentication → Emails → SMTP Settings**, turn on custom SMTP:
      host `smtp.resend.com`, port `465`, username `resend`, password = that Resend API key,
-     sender email e.g. `hello@yourdomain.com`, sender name `DeepWord`.
+     sender email e.g. `hello@yourdomain.com`, sender name `Omeora`.
 
 ## 3. Where sign-in may return to (2 minutes)
 
@@ -74,7 +74,7 @@ For phone builds later, the same three values go in the EAS build environment.
 ## 5. Optional: Continue with Google
 
 1. In Google Cloud Console, create a project, set up the **OAuth consent screen** (app name
-   DeepWord, your support email), then **Credentials → Create credentials → OAuth client ID →
+   Omeora, your support email), then **Credentials → Create credentials → OAuth client ID →
    Web application**. Under **Authorized redirect URIs** add
    `https://<your-project>.supabase.co/auth/v1/callback` (Supabase shows this exact address on
    its Google provider page).
@@ -89,7 +89,7 @@ so the app hides the Google button on iPhone until Apple is switched on as well.
 
 This needs the Apple Developer Program ($99/year), which you'll need for the App Store anyway.
 
-1. In the Apple Developer site, under **Identifiers**, create an App ID for DeepWord (for
+1. In the Apple Developer site, under **Identifiers**, create an App ID for Omeora (for
    example `com.yourname.deepword`) with **Sign in with Apple** ticked. Set the same value as
    `ios.bundleIdentifier` in `app.json` when the app gets its real name and icon.
 2. In Supabase, **Authentication → Sign In / Providers → Apple:** turn it on and add that App

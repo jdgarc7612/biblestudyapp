@@ -1,6 +1,6 @@
 # Bible text: sources and licences
 
-DeepWord ships three complete English Bibles (66 books each). All three are in the
+Omeora ships three complete English Bibles (66 books each). All three are in the
 public domain, so they can be bundled, displayed and quoted without permission or fees.
 
 | Code | Translation | Licence | Source file |
