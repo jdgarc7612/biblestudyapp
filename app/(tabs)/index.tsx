@@ -96,7 +96,11 @@ export default function HomeScreen() {
   const ownText = usePassageText(ownStudy);
   const focusText = ownStudy ? ownText : daily.text[translation];
   const openPlan = () =>
-    activePlan && router.push({ pathname: "/read/plans/[id]", params: { id: activePlan.id } });
+    activePlan &&
+      router.push({
+        pathname: "/study/plans/[id]",
+        params: { id: activePlan.id, ...(planDayNumber ? { day: String(planDayNumber) } : {}) },
+      });
   const sameAsDaily =
     !!ownStudy && ownStudy.book === daily.book && ownStudy.chapter === daily.chapter && ownStudy.start === daily.start;
 
@@ -269,7 +273,7 @@ export default function HomeScreen() {
         {/* Guided studies: one tap to browse plans until you're following one. */}
         {!activePlan && (
           <Pressable
-            onPress={() => router.push("/read/plans")}
+            onPress={() => router.push("/study")}
             className="flex-row items-center rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3.5 mt-3 active:opacity-70"
           >
             <View className="w-9 h-9 rounded-full bg-brand-blue/10 items-center justify-center mr-3">
@@ -299,7 +303,7 @@ export default function HomeScreen() {
               params: { question: `Give me a short recap of ${title} so I can pick up where I left off.` },
             })
           }
-          onMemory={() => router.push("/memory")}
+          onMemory={() => router.push({ pathname: "/study", params: { tab: "memory" } })}
           onAddSuggestion={() =>
             addToMemoryDeck({
               id: verseRangeId(focus.book, focus.chapter, focus.start, focus.end),

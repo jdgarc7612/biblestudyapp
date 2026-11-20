@@ -370,6 +370,19 @@ export default function ProfileScreen() {
             />
           </View>
 
+          <SectionLabel>Help and feedback</SectionLabel>
+          <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 mb-8">
+            <SettingsRow
+              icon="chatbubble-ellipses-outline"
+              label="Send feedback"
+              onPress={() => router.push("/feedback")}
+            />
+            <Divider />
+            <SettingsRow icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => router.push("/privacy")} />
+            <Divider />
+            <SettingsRow icon="document-text-outline" label="Terms of Use" onPress={() => router.push("/terms")} />
+          </View>
+
           <SectionLabel>Account</SectionLabel>
           {user ? (
             <>

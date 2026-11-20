@@ -71,7 +71,7 @@ export default function NotesScreen() {
 
   const open = (n: Entry) =>
     n.answer
-      ? router.push({ pathname: "/read/plans/[id]", params: { id: n.answer.planId, day: String(n.answer.day) } })
+      ? router.push({ pathname: "/study/plans/[id]", params: { id: n.answer.planId, day: String(n.answer.day) } })
       : router.push({
       pathname: "/read/[book]/[chapter]",
       params: {
