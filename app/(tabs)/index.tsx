@@ -160,7 +160,7 @@ export default function HomeScreen() {
               <Text className="text-xs font-semibold tracking-wide uppercase text-brand-earth ml-1.5">
                 {planDay
                   ? planDoneToday
-                    ? `Today's done · Day ${planDayNumber} next`
+                    ? `Done for today · Day ${planDayNumber} tomorrow`
                     : `Guided study · Day ${planDayNumber} of ${activePlan!.days.length}`
                   : ownStudy
                     ? "Your study"
@@ -206,7 +206,7 @@ export default function HomeScreen() {
               <Text className="text-[15px] font-semibold text-white ml-2">
                 {planDay
                   ? planDoneToday
-                    ? `Read day ${planDayNumber}`
+                    ? "See your plan"
                     : "Today's reading"
                   : ownStudy
                     ? "Keep studying"

@@ -10,6 +10,7 @@ import { localDateString } from "../../../../lib/date";
 import {
   doneDays,
   getPlan,
+  isDayOpen,
   nextDay,
   planAnswerId,
   readingLabel,
@@ -41,7 +42,9 @@ export default function PlanScreen() {
   const leavePlan = useAppStore((s) => s.leavePlan);
 
   const next = plan ? nextDay(plan, progress) : null;
-  const [openDay, setOpenDay] = useState<number | null>(dayParam ? Number(dayParam) : (next ?? 1));
+  const today = localDateString();
+  const nextOpen = !!plan && next !== null && isDayOpen(plan, progress, next, today);
+  const [openDay, setOpenDay] = useState<number | null>(dayParam ? Number(dayParam) : nextOpen ? next : null);
 
   if (!plan) return <Redirect href="/read/plans" />;
 
@@ -49,7 +52,6 @@ export default function PlanScreen() {
   const doneCount = doneDays(progress).length;
   const finished = next === null;
   const following = activePlanId === plan.id;
-  const today = localDateString();
 
   const toggleDay = (day: number) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -59,17 +61,8 @@ export default function PlanScreen() {
   const markDone = (day: number, done: boolean) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     if (done && !following && !finished) startPlan(plan.id, total);
+    // The day stays open; the next one opens tomorrow.
     setPlanDayDone(plan.id, day, done, total);
-    if (done) {
-      const after = { ...(progress?.done ?? {}), [day]: today };
-      for (let d = 1; d <= total; d++) {
-        if (!after[d]) {
-          setOpenDay(d);
-          return;
-        }
-      }
-      setOpenDay(null);
-    }
   };
 
   const read = (r: PlanReading) =>
@@ -178,7 +171,8 @@ export default function PlanScreen() {
             const n = i + 1;
             const doneOn = progress?.done[n];
             const isNext = n === next;
-            const isOpen = openDay === n;
+            const locked = !isDayOpen(plan, progress, n, today);
+            const isOpen = openDay === n && !locked;
             const label = readingsLabel(day.readings);
             return (
               <View
@@ -191,18 +185,21 @@ export default function PlanScreen() {
               >
                 <Pressable
                   onPress={() => toggleDay(n)}
+                  disabled={locked}
                   accessibilityRole="button"
-                  accessibilityState={{ expanded: isOpen }}
-                  className="flex-row items-center px-4 py-3.5 active:opacity-70"
+                  accessibilityState={{ expanded: isOpen, disabled: locked }}
+                  className={`flex-row items-center px-4 py-3.5 active:opacity-70 ${locked ? "opacity-60" : ""}`}
                 >
                   <View
                     className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
-                      doneOn ? "" : isNext ? "bg-white dark:bg-gray-900 border border-brand-blue/40" : "bg-gray-100 dark:bg-gray-800"
+                      doneOn ? "" : isNext && !locked ? "bg-white dark:bg-gray-900 border border-brand-blue/40" : "bg-gray-100 dark:bg-gray-800"
                     }`}
                     style={doneOn ? { backgroundColor: BLUE } : undefined}
                   >
                     {doneOn ? (
                       <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                    ) : locked ? (
+                      <Ionicons name="lock-closed" size={13} color="#9CA3AF" />
                     ) : (
                       <Text className={`text-sm font-bold ${isNext ? "text-brand-blue" : "text-gray-500 dark:text-gray-400"}`}>
                         {n}
@@ -213,10 +210,10 @@ export default function PlanScreen() {
                     <Text className="text-[15px] font-semibold text-gray-900 dark:text-white">{day.title}</Text>
                     <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       Day {n} · {label}
-                      {isNext && following ? " · Up next" : ""}
+                      {isNext && locked ? " · Unlocks tomorrow" : isNext && following ? " · Up next" : ""}
                     </Text>
                   </View>
-                  <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color="#9CA3AF" />
+                  {!locked && <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color="#9CA3AF" />}
                 </Pressable>
 
                 {isOpen && (

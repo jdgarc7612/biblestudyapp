@@ -75,3 +75,13 @@ export function listPlanAnswers(answers: Record<string, PlanAnswer>): PlanAnswer
   }
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }
+
+/**
+ * One new day per calendar day: a day can be opened once it's done (to reread and edit answers),
+ * and the next day opens unless a day was already finished today. Missed days don't count
+ * against anyone; the next day just waits.
+ */
+export function isDayOpen(plan: StudyPlan, progress: PlanProgress | undefined, day: number, today: string) {
+  if (progress?.done[day]) return true;
+  return day === nextDay(plan, progress) && !finishedADayOn(progress, today);
+}
