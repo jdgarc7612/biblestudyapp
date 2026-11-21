@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import type { PackPassage } from "../data/study/memory-packs";
 import { formatReference, getBook, isTranslationId, loadBook, verseRangeId, type TranslationId } from "./bible";
-import type { MemoryCard, NewMemoryCard } from "./memory";
+import { parseCardId, type MemoryCard, type NewMemoryCard } from "./memory";
 
 /** The passage's text, or "" when every verse in it is empty in this translation. */
 export async function passageText(translation: TranslationId, passage: PackPassage): Promise<string> {
@@ -92,6 +92,18 @@ export async function memberCardsFor(card: MemoryCard): Promise<NewMemoryCard[]>
   for (let v = card.start; v <= card.end; v++) {
     const next = await cardForPassage(translation, { book: card.book, chapter: card.chapter, start: v, end: v }, card.collections);
     if (next) out.push(next);
+  }
+  return out;
+}
+
+/** New cards for these verse ids (e.g. a shared challenge), in this translation. Empty verses are skipped. */
+export async function cardsForIds(translation: TranslationId, ids: string[], collections: string[]): Promise<NewMemoryCard[]> {
+  const out: NewMemoryCard[] = [];
+  for (const id of ids) {
+    const place = parseCardId(id);
+    if (!place) continue;
+    const card = await cardForPassage(translation, place, collections);
+    if (card) out.push(card);
   }
   return out;
 }

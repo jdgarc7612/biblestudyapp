@@ -16,6 +16,7 @@ import { ReferenceQuiz } from "../../components/memory/reference-quiz";
 import { StitchRecall } from "../../components/memory/stitch-recall";
 import { TypingRecall } from "../../components/memory/typing-recall";
 import { WordBankRecall, type BlankLevel } from "../../components/memory/word-bank-recall";
+import { WordOrderRecall } from "../../components/memory/word-order-recall";
 import { getPack } from "../../data/study/memory-packs";
 import {
   buildReviewQueue,
@@ -277,6 +278,14 @@ export default function MemorySessionScreen() {
             )}
             {method === "firstLetter" && (
               <FirstLetterRecall text={card.verseText} seed={card.id} tier={tier} onComplete={(a) => setResult({ accuracy: a, at: new Date() })} />
+            )}
+            {method === "wordOrder" && (
+              <WordOrderRecall
+                reference={card.verseReference}
+                text={card.verseText}
+                seed={`${card.id}-${attempt}`}
+                onComplete={(a) => setResult({ accuracy: a, at: new Date() })}
+              />
             )}
             {method === "type" && <TypingRecall text={card.verseText} onComplete={(a) => setResult({ accuracy: a, at: new Date() })} />}
             {method === "listen" && (

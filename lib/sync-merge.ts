@@ -21,6 +21,7 @@
  *   tokens never replace a real balance.
  */
 import { migrateCard, mergeLists, pickNewerCard, type MemoryCard } from "./memory";
+import { mergeChallenges } from "./memory-challenge";
 import type { useAppStore } from "../store/useAppStore";
 
 type Store = ReturnType<typeof useAppStore.getState>;
@@ -43,6 +44,7 @@ export const SYNCED_KEYS = [
   "memoryDeck",
   "deletedCardIds",
   "memoryLists",
+  "memoryChallenges",
   "memoryReviewDoneDate",
   "memoryReminder",
   "verseNotes",
@@ -97,6 +99,14 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
   if (gone.length) {
     merged.memoryDeck = merged.memoryDeck.map((c) =>
       c.collections.some((id) => gone.includes(id)) ? { ...c, collections: c.collections.filter((id) => !gone.includes(id)) } : c
+    );
+  }
+  // Challenges: the newer copy of each wins; a challenge left on either device takes its tag along.
+  merged.memoryChallenges = mergeChallenges(local.memoryChallenges, remote.memoryChallenges);
+  const left = Object.entries(merged.memoryChallenges).filter(([, c]) => c.left).map(([id]) => id);
+  if (left.length) {
+    merged.memoryDeck = merged.memoryDeck.map((c) =>
+      c.collections.some((id) => left.includes(id)) ? { ...c, collections: c.collections.filter((id) => !left.includes(id)) } : c
     );
   }
   const doneDates = [local.memoryReviewDoneDate, remote.memoryReviewDoneDate].filter((d): d is string => !!d).sort();

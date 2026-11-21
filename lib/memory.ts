@@ -25,6 +25,8 @@ export type MemoryMethod =
   | "listen"
   | "recite"
   | "reference"
+  /** Scrambled words or phrases, put back in order. */
+  | "wordOrder"
   /** A passage of three or more verses, one join at a time, then the whole. */
   | "stitch";
 /** What a recall exercise actually ran as. "learn" is the guided first sitting. */
@@ -409,6 +411,9 @@ export function smartMethod(card: MemoryCard, opts: { passageWarm?: boolean } = 
   // Now and then, a verse that's strong on wording is asked for its address instead.
   const recentReference = card.log.slice(-3).some((e) => e.method === "reference");
   if (card.srs.scheduled_days >= 14 && !recentReference && card.srs.reps % 3 === 0) return "reference";
+  // Now and then, a mid-strength verse is put back in order: a lighter change of pace.
+  const recentOrder = card.log.slice(-3).some((e) => e.method === "wordOrder");
+  if (card.srs.scheduled_days < 21 && !recentOrder && card.srs.reps % 4 === 1) return "wordOrder";
   if (card.srs.scheduled_days < 21) return "flashcard";
   return "type";
 }

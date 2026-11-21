@@ -4,7 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { serifFont } from "../../constants/fonts";
 import { speechChunks } from "../../lib/memory-reference";
-import { playChunks, speechAvailable } from "../../lib/speech";
+import { useSpeechSupport } from "../../hooks/use-speech-support";
+import { playChunks, type Playback, type SpeechFailure } from "../../lib/speech";
 
 const BLUE = "#4A6FA5";
 
@@ -31,19 +32,22 @@ export function ListenRecall({
   const [plays, setPlays] = useState(0);
   const [loop, setLoop] = useState(false);
   const [slow, setSlow] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<SpeechFailure | null>(null);
   const [revealed, setRevealed] = useState(false);
-  const stop = useRef<(() => void) | null>(null);
+  const playback = useRef<Playback | null>(null);
   const loopRef = useRef(loop);
   loopRef.current = loop;
-  const available = speechAvailable();
+  const support = useSpeechSupport();
+  const [tryAnyway, setTryAnyway] = useState(false);
+  const available = support === "ready" || support === "checking" || tryAnyway;
 
-  useEffect(() => () => stop.current?.(), []);
+  useEffect(() => () => playback.current?.stop(), []);
 
+  // Starts speaking inside this press: the browser only allows sound that a press asked for.
   const start = (from: number, rate = slow ? 0.8 : 1) => {
-    setError(false);
+    setError(null);
     setStatus("playing");
-    stop.current = playChunks(chunks, from, {
+    playback.current = playChunks(chunks, from, {
       rate,
       onChunk: setPart,
       onDone: () => {
@@ -54,24 +58,34 @@ export function ListenRecall({
           setPart(0);
         }
       },
-      onError: () => {
+      onError: (reason) => {
         setStatus("idle");
-        setError(true);
+        setError(reason);
       },
     });
   };
   const pause = () => {
-    stop.current?.();
+    playback.current?.pause();
     setStatus("paused");
   };
+  const resume = () => {
+    setError(null);
+    setStatus("playing");
+    if (playback.current) playback.current.resume();
+    else start(part);
+  };
   const halt = () => {
-    stop.current?.();
+    playback.current?.stop();
     if (status === "playing") setStatus("paused");
   };
 
   const playing = status === "playing";
   const statusText = error
-    ? "Your device couldn't read this aloud just now."
+    ? error === "no-voice"
+      ? "This browser has no voice to read aloud with."
+      : error === "blocked"
+        ? "Your browser didn't start reading. Press play again, and check the sound is on."
+        : "Your device couldn't read this aloud just now."
     : playing
       ? `Playing${chunks.length > 1 ? `, part ${part + 1} of ${chunks.length}` : ""}${loop ? ", on repeat" : ""}`
       : status === "paused"
@@ -86,7 +100,7 @@ export function ListenRecall({
         {available ? (
           <>
             <Pressable
-              onPress={() => (playing ? pause() : start(status === "paused" ? part : 0))}
+              onPress={() => (playing ? pause() : status === "paused" ? resume() : start(0))}
               accessibilityRole="button"
               accessibilityLabel={`${playing ? "Pause" : status === "paused" ? "Resume" : "Play"} ${reference}`}
               className="w-[72px] h-[72px] rounded-full items-center justify-center active:opacity-80"
@@ -94,12 +108,21 @@ export function ListenRecall({
             >
               <Ionicons name={playing ? "pause" : "play"} size={30} color="#FFFFFF" style={playing ? undefined : { marginLeft: 4 }} />
             </Pressable>
-            <View className="flex-row items-center mt-4" style={{ gap: 6 }}>
+            <View className="flex-row items-center mt-4 px-2" style={{ gap: 6 }}>
               {playing && <Ionicons name="volume-high" size={14} color={BLUE} />}
-              <Text className="text-sm font-semibold text-gray-700 dark:text-gray-200" accessibilityLiveRegion="polite">
+              {error && <Ionicons name="alert-circle-outline" size={15} color="#C19A6B" />}
+              <Text
+                className="text-sm font-semibold text-gray-700 dark:text-gray-200 text-center flex-shrink"
+                accessibilityLiveRegion="polite"
+              >
                 {statusText}
               </Text>
             </View>
+            {error && (
+              <Text className="text-[13px] text-gray-500 dark:text-gray-400 text-center mt-1.5 leading-5">
+                Recite works the same way without sound.
+              </Text>
+            )}
             {chunks.length > 1 && (
               <View className="flex-row w-full mt-3" style={{ gap: 4 }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
                 {chunks.map((_, i) => {
@@ -126,6 +149,11 @@ export function ListenRecall({
                   const next = !slow;
                   setSlow(next);
                   if (playing) start(part, next ? 0.8 : 1);
+                  else if (status === "paused") {
+                    // Resume then starts this piece again at the new speed.
+                    playback.current?.stop();
+                    playback.current = null;
+                  }
                 }}
                 spoken="Read more slowly"
               />
@@ -137,6 +165,20 @@ export function ListenRecall({
             <Text className="text-[15px] text-gray-600 dark:text-gray-300 text-center mt-3 leading-6">
               This browser can&apos;t read aloud. Recite works the same way without sound.
             </Text>
+            {support === "no-voices" && (
+              <Pressable
+                onPress={() => {
+                  setTryAnyway(true);
+                  start(0);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Try reading ${reference} aloud anyway`}
+                hitSlop={10}
+                className="mt-3 active:opacity-60"
+              >
+                <Text className="text-sm font-semibold text-brand-blue">Try playing anyway</Text>
+              </Pressable>
+            )}
           </View>
         )}
       </View>
