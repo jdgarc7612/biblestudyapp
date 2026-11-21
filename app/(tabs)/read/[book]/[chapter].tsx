@@ -2,19 +2,23 @@ import { Link, Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  GestureResponderEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
   PanResponder,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { StudyPanel, type OpenTarget, type StudyTab } from "../../../../components/read/study-panel";
+import { VerseActionSheet, type SheetStatus } from "../../../../components/read/verse-action-sheet";
 import { SettingCard } from "../../../../components/read/setting-card";
 import { TranslationPill } from "../../../../components/read/translation-picker";
 import { contextNoteForChapter } from "../../../../data/study/context-notes";
@@ -30,13 +34,23 @@ import {
 } from "../../../../lib/bible";
 import { localDateString } from "../../../../lib/date";
 import { selectionNoteStatus } from "../../../../lib/notes";
+import { copyText, shareText } from "../../../../lib/share";
+import {
+  chapterHighlights,
+  formatVerseShare,
+  highlightSwatch,
+  isSaved,
+  listSaved,
+  selectionHighlight,
+  type HighlightColor,
+} from "../../../../lib/verse-marks";
 import { useAppStore } from "../../../../store/useAppStore";
 
 const READ_ENGAGEMENT_SECONDS = 20;
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
 
-// Stops the browser from highlighting text while swiping the action bar on the web.
+// Stops the browser from highlighting text while dragging the action bar on the web.
 const NO_SELECT = Platform.OS === "web" ? ({ userSelect: "none" } as object) : undefined;
 
 export async function generateStaticParams(): Promise<{ book: string; chapter: string }[]> {
@@ -127,6 +141,7 @@ function ChapterReader({
   const readToday = lastReadDate === localDateString();
 
   const engagementLoggedRef = useRef(false);
+  const scrollYRef = useRef(0);
   useEffect(() => {
     engagementLoggedRef.current = false;
     const timer = setTimeout(() => {
@@ -137,6 +152,7 @@ function ChapterReader({
   }, [chapterNum, logReadEngagement]);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollYRef.current = e.nativeEvent.contentOffset.y;
     if (engagementLoggedRef.current) return;
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 40) {
@@ -153,7 +169,20 @@ function ChapterReader({
   // `anchor` is the first verse tapped; `focus` is the most recently tapped verse.
   // The selected range is always [min(anchor, focus), max(anchor, focus)].
   const [selection, setSelection] = useState<{ anchor: number; focus: number } | null>(initialSelection);
+  // sheetOpen: the Study panel. actionsOpen: the bar dragged up into the larger action sheet.
   const [sheetOpen, setSheetOpen] = useState(openStudy);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [status, setStatus] = useState<SheetStatus>(null);
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showStatus = (next: SheetStatus) => {
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    setStatus(next);
+    if (next) statusTimer.current = setTimeout(() => setStatus(null), 2600);
+  };
+  useEffect(() => () => {
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+  }, []);
+  const { height: windowHeight } = useWindowDimensions();
   // Which tab (and word) the study panel opens on. A context note's "word to notice" sets both.
   const [studyTab, setStudyTab] = useState<StudyTab>(routeTab);
   const [initialWord, setInitialWord] = useState<number | undefined>(routeWord);
@@ -199,6 +228,27 @@ function ChapterReader({
     if (y > 80) setTimeout(() => scrollRef.current?.scrollTo({ y, animated: true }), 50);
   };
 
+  // Highlights and Saved (lib/verse-marks.ts). `savedRanges` below is the Memory deck, not Saved.
+  const verseHighlights = useAppStore((state) => state.verseHighlights);
+  const savedVerses = useAppStore((state) => state.savedVerses);
+  const setVerseHighlight = useAppStore((state) => state.setVerseHighlight);
+  const saveVerse = useAppStore((state) => state.saveVerse);
+  const unsaveVerse = useAppStore((state) => state.unsaveVerse);
+  const setTranslation = useAppStore((state) => state.setTranslation);
+  const highlightColors = useMemo(
+    () => chapterHighlights(verseHighlights, bookId, chapterNum),
+    [verseHighlights, bookId, chapterNum]
+  );
+  const bookmarkEnds = useMemo(
+    () =>
+      new Set(
+        listSaved(savedVerses)
+          .filter((s) => s.book === bookId && s.chapter === chapterNum)
+          .map((s) => s.end)
+      ),
+    [savedVerses, bookId, chapterNum]
+  );
+
   const savedRanges = useMemo(
     () =>
       memoryDeck
@@ -207,7 +257,17 @@ function ChapterReader({
     [memoryDeck, bookId, chapterNum]
   );
 
-  const swipeResponder = useRef(
+  // Drag the selection bar up to open the action sheet, down to close it (or, when it's already
+  // closed, to put the selection away). Works with touch and with a mouse on the web.
+  const gestureRef = useRef({ expand: () => {}, collapse: () => {} });
+  gestureRef.current = {
+    expand: () => setActionsOpen(true),
+    collapse: () => {
+      if (actionsOpen) setActionsOpen(false);
+      else clearSelection();
+    },
+  };
+  const dragResponder = useRef(
     PanResponder.create({
       // Capture phase so this claims the gesture before the nested Pressable's
       // own tap handling does — a plain (bubble-phase) onMoveShouldSetPanResponder
@@ -215,15 +275,31 @@ function ChapterReader({
       onMoveShouldSetPanResponderCapture: (_, gesture) =>
         Math.abs(gesture.dy) > 12 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
       onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy < -20) setSheetOpen(true);
+        if (gesture.dy < -20) gestureRef.current.expand();
+        else if (gesture.dy > 30) gestureRef.current.collapse();
       },
     })
   ).current;
 
+  // Where the last tapped verse sits, so opening the sheet can keep it in view.
+  const tapRef = useRef<{ pageY: number; scrollY: number } | null>(null);
+  const readerRef = useRef<View>(null);
+  const keepSelectionInView = () => {
+    const tap = tapRef.current;
+    if (!actionsOpen || !tap || !readerRef.current) return;
+    readerRef.current.measureInWindow((_x, y, _w, h) => {
+      const verseY = tap.pageY - (scrollYRef.current - tap.scrollY);
+      const overflow = verseY + 36 - (y + h);
+      if (overflow > 0) scrollRef.current?.scrollTo({ y: scrollYRef.current + overflow + 16, animated: true });
+    });
+  };
+
   const prev = neighbour(bookId, chapterNum, -1);
   const next = neighbour(bookId, chapterNum, 1);
 
-  const handleVersePress = (verseNum: number) => {
+  const handleVersePress = (verseNum: number, event?: GestureResponderEvent) => {
+    const pageY = event?.nativeEvent?.pageY;
+    if (typeof pageY === "number") tapRef.current = { pageY, scrollY: scrollYRef.current };
     if (!selection) {
       setSelection({ anchor: verseNum, focus: verseNum });
       return;
@@ -231,6 +307,7 @@ function ChapterReader({
     if (selection.anchor === selection.focus && selection.anchor === verseNum) {
       setSelection(null);
       setSheetOpen(false);
+      setActionsOpen(false);
       return;
     }
     setSelection({ anchor: selection.anchor, focus: verseNum });
@@ -239,6 +316,7 @@ function ChapterReader({
   const clearSelection = () => {
     setSelection(null);
     setSheetOpen(false);
+    setActionsOpen(false);
   };
 
   const rangeStart = selection ? Math.min(selection.anchor, selection.focus) : null;
@@ -262,6 +340,51 @@ function ChapterReader({
     rangeStart !== null && rangeEnd !== null
       ? selectionNoteStatus(verseNotes, bookId, chapterNum, rangeStart, rangeEnd)
       : { own: false, count: 0 };
+
+  const selectionColor =
+    rangeStart !== null && rangeEnd !== null ? selectionHighlight(highlightColors, rangeStart, rangeEnd) : null;
+  const selectionHasHighlight =
+    rangeStart !== null && rangeEnd !== null
+      ? selectedVerses.some((v) => highlightColors.has(v.verse))
+      : false;
+  const isSavedSelection = isSaved(savedVerses, cardId);
+
+  const highlightSelection = (color: HighlightColor | null) => {
+    if (rangeStart === null || rangeEnd === null) return;
+    setVerseHighlight(bookId, chapterNum, rangeStart, rangeEnd, color);
+    showStatus(
+      color
+        ? { tone: "ok", text: `Highlighted ${highlightSwatch(color)?.name.toLowerCase() ?? ""}` }
+        : { tone: "ok", text: "Highlight removed" }
+    );
+  };
+
+  const toggleSaved = () => {
+    if (!cardId) return;
+    if (isSavedSelection) {
+      unsaveVerse(cardId);
+      showStatus({ tone: "ok", text: "Removed from Saved" });
+    } else {
+      saveVerse(cardId, { reference: verseReference, translation, text: selectedText });
+      showStatus({ tone: "ok", text: "Saved. Find it next to your notes" });
+    }
+  };
+
+  const shareMessage = () => formatVerseShare(verseReference, translation, selectedVerses);
+  const copySelection = async () => {
+    const result = await copyText(shareMessage());
+    showStatus(
+      result === "copied"
+        ? { tone: "ok", text: `Copied ${verseReference} (${translation})` }
+        : { tone: "error", text: "Couldn't copy here. Try Share instead." }
+    );
+  };
+  const shareSelection = async () => {
+    const result = await shareText(shareMessage());
+    if (result === "shared") showStatus({ tone: "ok", text: "Shared" });
+    else if (result === "copied") showStatus({ tone: "ok", text: "No share sheet here, so it's copied instead" });
+    else if (result === "failed") showStatus({ tone: "error", text: "Couldn't share. Try Copy instead." });
+  };
 
   const goToAI = (autoAsk?: "insights", question?: string) => {
     clearSelection();
@@ -342,6 +465,7 @@ function ChapterReader({
         </Pressable>
       </View>
 
+      <View ref={readerRef} className="flex-1" onLayout={keepSelectionInView}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }}
@@ -390,26 +514,41 @@ function ChapterReader({
         >
           {chapterData.verses.map((v) => {
             const noted = notedRanges.some((r) => r && v.verse === r.end);
-            const saved = savedRanges.some((r) => r && v.verse >= r.start && v.verse <= r.end);
+            // In the Memory deck (earth wash), not the Saved list.
+            const inMemory = savedRanges.some((r) => r && v.verse >= r.start && v.verse <= r.end);
+            const highlight = highlightSwatch(highlightColors.get(v.verse));
+            const bookmarked = bookmarkEnds.has(v.verse);
             const inSelection =
               rangeStart !== null && rangeEnd !== null && v.verse >= rangeStart && v.verse <= rangeEnd;
             return (
               <Text
                 key={v.verse}
-                onPress={() => handleVersePress(v.verse)}
+                onPress={(ev) => handleVersePress(v.verse, ev)}
                 style={
                   inSelection
                     ? { backgroundColor: "#4A6FA533" }
-                    : saved
-                      ? { backgroundColor: "#C19A6B33" }
-                      : undefined
+                    : highlight
+                      ? { backgroundColor: highlight.wash }
+                      : inMemory
+                        ? { backgroundColor: "#C19A6B33" }
+                        : undefined
                 }
               >
                 <Text className="text-xs font-bold text-brand-earth">{v.verse} </Text>
                 {v.text}
+                {highlight && inMemory && !inSelection ? (
+                  <Text accessibilityLabel="In Memory" className="text-xs">
+                    {" "}<Ionicons name="albums" size={11} color={EARTH} />
+                  </Text>
+                ) : null}
                 {noted ? (
                   <Text accessibilityLabel="You have a note here" className="text-xs text-brand-blue">
                     {" "}✎
+                  </Text>
+                ) : null}
+                {bookmarked ? (
+                  <Text accessibilityLabel="Saved" className="text-xs">
+                    {" "}<Ionicons name="bookmark" size={11} color={BLUE} />
                   </Text>
                 ) : null}{" "}
               </Text>
@@ -423,13 +562,43 @@ function ChapterReader({
           </Text>
         )}
       </ScrollView>
+      {selection && actionsOpen ? (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => setActionsOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel={`Hide extra actions for ${verseReference}`}
+        />
+      ) : null}
+      </View>
 
       {selection ? (
         <View
-          {...swipeResponder.panHandlers}
-          className="flex-row items-center px-4 py-3 border-t border-gray-100 dark:border-gray-800"
-          style={NO_SELECT}
+          className={`border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 ${actionsOpen ? "rounded-t-3xl" : ""}`}
+          style={[NO_SELECT, actionsOpen ? styles.sheetShadow : null]}
         >
+        <View {...dragResponder.panHandlers}>
+          <Pressable
+            onPress={() => setActionsOpen((open) => !open)}
+            hitSlop={{ top: 6, bottom: 2 }}
+            className="items-center pt-2 pb-0.5 active:opacity-60"
+            accessibilityRole="button"
+            accessibilityLabel={
+              actionsOpen ? `Hide extra actions for ${verseReference}` : `Show more actions for ${verseReference}`
+            }
+            accessibilityState={{ expanded: actionsOpen }}
+          >
+            <View className="flex-row items-center">
+              <View className="rounded-full bg-gray-300 dark:bg-gray-600" style={{ width: 36, height: 4 }} />
+            </View>
+            <View className="flex-row items-center mt-0.5">
+              <Ionicons name={actionsOpen ? "chevron-down" : "chevron-up"} size={12} color="#9CA3AF" />
+              <Text className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 ml-0.5">
+                {actionsOpen ? "Less" : "More"}
+              </Text>
+            </View>
+          </Pressable>
+        <View className="flex-row items-center px-4 pt-1 pb-3">
           <Pressable
             onPress={clearSelection}
             hitSlop={8}
@@ -491,6 +660,29 @@ function ChapterReader({
               accessibilityLabel={`Study ${verseReference}: original words, cross-references, context`}
             />
           </View>
+        </View>
+        </View>
+        {actionsOpen && cardId && rangeStart !== null && rangeEnd !== null ? (
+          <VerseActionSheet
+            reference={verseReference}
+            previewText={selectedText}
+            translation={translation}
+            bookId={bookId}
+            chapter={chapterNum}
+            start={rangeStart}
+            end={rangeEnd}
+            highlight={selectionColor}
+            anyHighlight={selectionHasHighlight}
+            saved={isSavedSelection}
+            status={status}
+            maxHeight={Math.round(windowHeight * 0.45)}
+            onHighlight={highlightSelection}
+            onToggleSave={toggleSaved}
+            onCopy={copySelection}
+            onShare={shareSelection}
+            onReadIn={setTranslation}
+          />
+        ) : null}
         </View>
       ) : (
         <View className="flex-row items-center justify-between px-5 py-4 border-t border-gray-100 dark:border-gray-800">
@@ -555,6 +747,16 @@ function ChapterReader({
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  sheetShadow: {
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
+  },
+});
 
 /** One action on the verse selection bar: an icon with a short word under it, so nothing is a guess. */
 function BarAction({

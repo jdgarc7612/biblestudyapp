@@ -14,6 +14,8 @@
  * - The date Review was last finished takes the later one; the reminder setting takes the newer edit.
  * - Each streak comes from the copy that logged a day most recently; best streaks take the higher.
  * - Study notes are combined by verse; for a note on both, the more recently edited one wins.
+ * - Highlights and saved verses are combined by verse range the same way; removals are kept as
+ *   tombstones so they win over an older copy.
  * - Guided study progress is combined by plan, and answers by question; the more recently changed copy wins.
  * - Badges and claimed bonuses are combined.
  * - Settings, name and tokens come from whichever copy changed last. The first time a device
@@ -22,6 +24,7 @@
  */
 import { migrateCard, mergeLists, pickNewerCard, type MemoryCard } from "./memory";
 import { mergeChallenges } from "./memory-challenge";
+import { mergeByUpdatedAt } from "./verse-marks";
 import type { useAppStore } from "../store/useAppStore";
 
 type Store = ReturnType<typeof useAppStore.getState>;
@@ -48,6 +51,8 @@ export const SYNCED_KEYS = [
   "memoryReviewDoneDate",
   "memoryReminder",
   "verseNotes",
+  "verseHighlights",
+  "savedVerses",
   "planProgress",
   "planAnswers",
   "currentReadStreak",
@@ -120,6 +125,8 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
     if (!notes[id] || note.updatedAt > notes[id].updatedAt) notes[id] = note;
   }
   merged.verseNotes = notes;
+  merged.verseHighlights = mergeByUpdatedAt(local.verseHighlights, remote.verseHighlights);
+  merged.savedVerses = mergeByUpdatedAt(local.savedVerses, remote.savedVerses);
 
   const plans = { ...(remote.planProgress ?? {}) };
   for (const [id, progress] of Object.entries(local.planProgress ?? {})) {
