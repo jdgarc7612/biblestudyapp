@@ -22,9 +22,11 @@ import {
   type MemoryMethod,
   type NewMemoryCard,
 } from "../lib/memory";
+import type { MemoryChallenge } from "../lib/memory-challenge";
 import storage from "../lib/storage";
 
 export type { MemoryCard, MemoryList, MemoryMethod, NewMemoryCard } from "../lib/memory";
+export type { MemoryChallenge } from "../lib/memory-challenge";
 
 export interface MemoryReminder {
   enabled: boolean;
@@ -89,6 +91,8 @@ interface AppState {
   memoryMethod: MemoryMethod;
   /** The person's own named lists of memory verses, keyed "list-...". */
   memoryLists: Record<string, MemoryList>;
+  /** Verses learned alongside family or a group (lib/memory-challenge.ts). Progress stays per person. */
+  memoryChallenges: Record<string, MemoryChallenge>;
   /** Local date a Review session was last finished; Home stops reminding after that. */
   memoryReviewDoneDate: string | null;
   /** Local date the Home reminder was put away for the day (this device only). */
@@ -164,6 +168,10 @@ interface AppState {
   createMemoryList: (name: string) => string;
   renameMemoryList: (id: string, name: string) => void;
   deleteMemoryList: (id: string) => void;
+  /** Saves a challenge this person started or joined (the verses are added separately). */
+  saveMemoryChallenge: (challenge: MemoryChallenge) => void;
+  /** Leaves a challenge: its tag comes off the cards, the cards and their progress stay. */
+  leaveMemoryChallenge: (id: string) => void;
   addChatMessage: (message: ChatMessage) => void;
   clearChat: () => void;
   setDisplayName: (name: string) => void;
@@ -229,6 +237,7 @@ export const useAppStore = create<AppState>()(
       memoryDeck: [],
       memoryMethod: "smart",
       memoryLists: {},
+      memoryChallenges: {},
       memoryReviewDoneDate: null,
       memoryNudgeDismissedDate: null,
       memoryReminder: { enabled: false, hour: 8, minute: 0, updatedAt: 0 },
@@ -333,6 +342,22 @@ export const useAppStore = create<AppState>()(
       markMemoryReviewDone: () => set({ memoryReviewDoneDate: localDateString() }),
       dismissMemoryNudge: () => set({ memoryNudgeDismissedDate: localDateString() }),
       setMemoryReminder: (reminder) => set({ memoryReminder: { ...reminder, updatedAt: Date.now() } }),
+
+      saveMemoryChallenge: (challenge) =>
+        set((state) => ({ memoryChallenges: { ...state.memoryChallenges, [challenge.id]: challenge } })),
+
+      leaveMemoryChallenge: (id) =>
+        set((state) => {
+          const challenge = state.memoryChallenges[id];
+          if (!challenge) return {};
+          const now = Date.now();
+          return {
+            memoryChallenges: { ...state.memoryChallenges, [id]: { ...challenge, left: true, updatedAt: now } },
+            memoryDeck: state.memoryDeck.map((c) =>
+              c.collections.includes(id) ? { ...c, collections: c.collections.filter((x) => x !== id), updatedAt: now } : c
+            ),
+          };
+        }),
 
       createMemoryList: (name) => {
         const id = `list-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;

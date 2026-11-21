@@ -20,6 +20,7 @@ import {
   type CardStatus,
   type MemoryCard,
 } from "../../lib/memory";
+import { challengeProgress, type MemoryChallenge } from "../../lib/memory-challenge";
 import { memberCardsFor } from "../../lib/memory-text";
 import { remindersSupported, requestReminderPermission } from "../../lib/reminders";
 import { daysUntil } from "../../lib/srs";
@@ -45,6 +46,7 @@ export function MemoryPanel() {
   const router = useRouter();
   const memoryDeck = useAppStore((s) => s.memoryDeck);
   const memoryLists = useAppStore((s) => s.memoryLists);
+  const memoryChallenges = useAppStore((s) => s.memoryChallenges);
   const memoryMethod = useAppStore((s) => s.memoryMethod);
   const setMemoryMethod = useAppStore((s) => s.setMemoryMethod);
   const streak = useAppStore((s) => s.currentMemoryStreak);
@@ -60,6 +62,9 @@ export function MemoryPanel() {
   const newLeft = newRemainingToday(memoryDeck, now);
   const queueSize = buildReviewQueue(memoryDeck, now).length;
   const lists = Object.entries(memoryLists).filter(([, l]) => !l.deleted);
+  const challenges = Object.values(memoryChallenges)
+    .filter((c) => !c.left)
+    .sort((a, b) => b.createdAt - a.createdAt);
 
   const sorted = useMemo(() => sortDeck(memoryDeck), [memoryDeck]);
   const shown = sorted.filter((c) => {
@@ -109,6 +114,7 @@ export function MemoryPanel() {
             <PackRow key={pack.id} pack={pack} inDeck={0} onPress={() => openCollection(pack.id)} />
           ))}
         </View>
+        <JoinRow onPress={() => router.push("/memory/join")} />
       </View>
     );
   }
@@ -185,13 +191,49 @@ export function MemoryPanel() {
         ))}
       </View>
 
+      {/* Together */}
+      <View className="flex-row items-center justify-between mt-7 mb-2">
+        <Text className="text-xs font-semibold uppercase tracking-wide text-brand-earth">Together</Text>
+        <Pressable
+          onPress={() => router.push("/memory/join")}
+          accessibilityRole="button"
+          accessibilityLabel="Join a challenge with a code"
+          hitSlop={10}
+          className="flex-row items-center active:opacity-60"
+        >
+          <Ionicons name="enter-outline" size={15} color={BLUE} />
+          <Text className="text-sm font-semibold text-brand-blue ml-1">Join with a code</Text>
+        </Pressable>
+      </View>
+      {challenges.length > 0 ? (
+        <View style={{ gap: 10 }}>
+          {challenges.map((c) => (
+            <ChallengeRow
+              key={c.id}
+              challenge={c}
+              deck={memoryDeck}
+              onPress={() => router.push({ pathname: "/memory/challenge", params: { id: c.id } })}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text className="text-sm leading-6 text-gray-500 dark:text-gray-400">
+          Memorize the same verses as your family or small group. Open any collection or list and choose Memorize
+          together.
+        </Text>
+      )}
+
       {/* Deck */}
       <SectionLabel top>{`Your verses (${memoryDeck.length})`}</SectionLabel>
       <View className="flex-row flex-wrap mb-3" style={{ gap: 8 }}>
         {(["all", "due", "new", "secure"] as const).map((f) => (
           <Chip key={f} label={f === "all" ? "All" : f === "due" ? "Due" : f === "new" ? "New" : "Secure"} on={filter === f} onPress={() => setFilter(f)} />
         ))}
-        {[...lists.map(([id, l]) => ({ id, name: l.name })), ...MEMORY_PACKS.map((p) => ({ id: p.id, name: p.title }))]
+        {[
+          ...lists.map(([id, l]) => ({ id, name: l.name })),
+          ...challenges.map((c) => ({ id: c.id, name: c.name })),
+          ...MEMORY_PACKS.map((p) => ({ id: p.id, name: p.title })),
+        ]
           .filter((c) => memoryDeck.some((card) => card.collections.includes(c.id)))
           .map((c) => (
             <Chip key={c.id} label={c.name} on={filter === c.id} onPress={() => setFilter(c.id)} />
@@ -448,6 +490,46 @@ function ListRow({ name, count, onPress }: { name: string; count: number; onPres
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+    </Pressable>
+  );
+}
+
+function ChallengeRow({ challenge, deck, onPress }: { challenge: MemoryChallenge; deck: MemoryCard[]; onPress: () => void }) {
+  const p = challengeProgress(challenge, deck);
+  const summary = `${p.secure} of ${p.total} secure${p.due > 0 ? ` · ${p.due} due` : ""}`;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${challenge.name}, memorizing together. Your progress: ${summary}`}
+      className="flex-row items-center rounded-3xl border border-brand-earth/30 bg-brand-earth/5 dark:bg-brand-earth/10 px-4 py-3.5 active:opacity-80"
+    >
+      <View className="w-10 h-10 rounded-full bg-brand-earth/15 items-center justify-center mr-3">
+        <Ionicons name="people" size={17} color={EARTH} />
+      </View>
+      <View className="flex-1">
+        <Text className="text-[15px] font-bold text-gray-900 dark:text-white">{challenge.name}</Text>
+        <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          {challenge.role === "started" ? "You started it" : "Joined from a code"} · Your progress: {summary}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+    </Pressable>
+  );
+}
+
+function JoinRow({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Have a code from family or friends? Join their challenge"
+      className="flex-row items-center self-center mt-7 active:opacity-60"
+      hitSlop={8}
+    >
+      <Ionicons name="people-outline" size={15} color={BLUE} />
+      <Text className="text-sm text-gray-600 dark:text-gray-300 ml-1.5">Have a code from family or friends? </Text>
+      <Text className="text-sm font-semibold text-brand-blue">Join</Text>
     </Pressable>
   );
 }

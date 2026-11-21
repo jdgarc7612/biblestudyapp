@@ -4,7 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { serifFont } from "../../constants/fonts";
 import { speechChunks } from "../../lib/memory-reference";
-import { playChunks, speechAvailable } from "../../lib/speech";
+import { useSpeechSupport } from "../../hooks/use-speech-support";
+import { playChunks, type Playback } from "../../lib/speech";
 
 /**
  * Say the passage aloud from memory, start to finish (nothing is recorded or transcribed),
@@ -22,24 +23,31 @@ export function ReciteRecall({
   const [cue, setCue] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [hearing, setHearing] = useState(false);
-  const stop = useRef<(() => void) | null>(null);
+  const [silent, setSilent] = useState(false);
+  const playback = useRef<Playback | null>(null);
+  const support = useSpeechSupport();
   const chunks = useMemo(() => speechChunks(text), [text]);
   const firstWords = text.trim().split(/\s+/).slice(0, 3).join(" ");
 
-  useEffect(() => () => stop.current?.(), []);
+  useEffect(() => () => playback.current?.stop(), []);
 
+  // Starts speaking inside this press: the browser only allows sound that a press asked for.
   const hear = () => {
     if (hearing) {
-      stop.current?.();
+      playback.current?.stop();
       setHearing(false);
       return;
     }
+    setSilent(false);
     setHearing(true);
-    stop.current = playChunks(chunks, 0, {
+    playback.current = playChunks(chunks, 0, {
       rate: 1,
       onChunk: () => {},
       onDone: () => setHearing(false),
-      onError: () => setHearing(false),
+      onError: () => {
+        setHearing(false);
+        setSilent(true);
+      },
     });
   };
 
@@ -49,7 +57,7 @@ export function ReciteRecall({
         <Text style={{ fontFamily: serifFont }} className="text-xl leading-9 text-gray-900 dark:text-gray-100" accessibilityLiveRegion="polite">
           {text}
         </Text>
-        {speechAvailable() && (
+        {(support === "ready" || support === "checking") && (
           <Pressable
             onPress={hear}
             accessibilityRole="button"
@@ -60,6 +68,14 @@ export function ReciteRecall({
             <Ionicons name={hearing ? "stop-circle-outline" : "volume-high-outline"} size={16} color="#4A6FA5" />
             <Text className="text-sm font-semibold text-brand-blue ml-1.5">{hearing ? "Stop" : "Hear it to check"}</Text>
           </Pressable>
+        )}
+        {(silent || support === "no-voices") && (
+          <View className="flex-row items-center mt-3" accessibilityLiveRegion="polite">
+            <Ionicons name="volume-mute-outline" size={15} color="#9CA3AF" />
+            <Text className="text-[13px] text-gray-500 dark:text-gray-400 ml-1.5 flex-shrink">
+              This browser can&apos;t read it aloud right now. Check the words above instead.
+            </Text>
+          </View>
         )}
       </View>
     );

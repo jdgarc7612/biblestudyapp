@@ -8,6 +8,7 @@ export const METHODS: { id: MemoryMethod; label: string; sub: string; icon: keyo
   { id: "flashcard", label: "Flashcard", sub: "See the reference, say it, then check", icon: "albums-outline" },
   { id: "blanks", label: "Fill in the blanks", sub: "Tap the missing words in order", icon: "grid-outline" },
   { id: "firstLetter", label: "First letter", sub: "Type the first letter of each hidden word", icon: "text-outline" },
+  { id: "wordOrder", label: "Word order", sub: "Put the scrambled words back in order", icon: "shuffle-outline" },
   { id: "type", label: "Type it out", sub: "Type the whole verse from memory", icon: "create-outline" },
   { id: "listen", label: "Listen", sub: "Hear it read aloud by your device, then check", icon: "headset-outline" },
   { id: "recite", label: "Recite", sub: "Say it aloud start to finish, then check", icon: "chatbubbles-outline" },

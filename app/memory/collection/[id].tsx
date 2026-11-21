@@ -213,6 +213,7 @@ function PackView({ pack }: { pack: MemoryPack }) {
           <Text className="text-base font-semibold text-brand-blue">Practice this collection</Text>
         </Pressable>
       )}
+      <TogetherButton from={pack.id} label={pack.title} />
     </ScrollView>
   );
 }
@@ -251,6 +252,7 @@ function ListView({ id, name }: { id: string; name: string }) {
           >
             <Text className="text-base font-semibold text-white">Practice this list</Text>
           </Pressable>
+          <TogetherButton from={id} label={name} />
           <View className="mt-5" style={{ gap: 8 }}>
             {cards.map((card) => (
               <DeckRow
@@ -303,5 +305,23 @@ function ListView({ id, name }: { id: string; name: string }) {
         ]}
       />
     </ScrollView>
+  );
+}
+
+/** Start a challenge from this collection or list: the same verses, learned with family or a group. */
+function TogetherButton({ from, label }: { from: string; label: string }) {
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: "/memory/challenge", params: { from } })}
+      accessibilityRole="button"
+      accessibilityLabel={`Memorize ${label} together with family or a group`}
+      className="flex-row items-center justify-center rounded-2xl bg-brand-earth/10 dark:bg-brand-earth/15 py-3.5 mt-3 active:opacity-70"
+    >
+      <Ionicons name="people-outline" size={17} color={EARTH} />
+      <Text className="text-base font-semibold ml-2 text-[#8A6A44] dark:text-[#D9B88F]">
+        Memorize together
+      </Text>
+    </Pressable>
   );
 }
