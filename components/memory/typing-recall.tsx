@@ -1,124 +1,78 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
 import { serifFont } from "../../constants/fonts";
-import { diffVerse, suggestGradeFromAccuracy } from "../../lib/verse-diff";
-import { useAppStore, type MemoryCard } from "../../store/useAppStore";
-import { Grade } from "../../lib/srs";
-import { GradeButtons } from "./grade-buttons";
+import { diffVerse } from "../../lib/verse-diff";
+import { ResultLine } from "./word-bank-recall";
 
-const HARD_TIME_LIMIT = 60;
-
-export function TypingRecall({
-  card,
-  onGrade,
-}: {
-  card: MemoryCard;
-  onGrade: (grade: Grade) => void;
-}) {
-  const difficulty = useAppStore((state) => state.difficulty);
+/** Type the whole passage, then see a word-by-word check. No timer. */
+export function TypingRecall({ text, onComplete }: { text: string; onComplete: (accuracy: number) => void }) {
   const [typed, setTyped] = useState("");
-  const [checked, setChecked] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(HARD_TIME_LIMIT);
+  const [result, setResult] = useState<ReturnType<typeof diffVerse> | null>(null);
 
-  useEffect(() => {
-    if (difficulty !== "hard" || checked) return;
-    if (secondsLeft <= 0) {
-      setChecked(true);
-      return;
-    }
-    const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [difficulty, checked, secondsLeft]);
+  const check = () => {
+    const r = diffVerse(text, typed);
+    setResult(r);
+    onComplete(r.accuracy);
+  };
 
-  const result = checked ? diffVerse(card.verseText, typed) : null;
-  const suggestedGrade = result ? suggestGradeFromAccuracy(result.accuracy) : undefined;
+  if (!result) {
+    const empty = typed.trim().length === 0;
+    return (
+      <View>
+        <TextInput
+          value={typed}
+          onChangeText={setTyped}
+          multiline
+          autoFocus
+          placeholder="Type it from memory…"
+          placeholderTextColor="#9CA3AF"
+          accessibilityLabel="Type the passage from memory"
+          style={{ fontFamily: serifFont, minHeight: 150, textAlignVertical: "top" }}
+          className="text-lg leading-8 text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3"
+        />
+        <Pressable
+          onPress={check}
+          disabled={empty}
+          accessibilityRole="button"
+          accessibilityLabel="Check what I typed"
+          accessibilityState={{ disabled: empty }}
+          className="mt-5 rounded-2xl bg-brand-blue py-4 items-center active:opacity-80"
+          style={{ opacity: empty ? 0.4 : 1 }}
+        >
+          <Text className="text-base font-semibold text-white">Check</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
+  const missed = result.tokens.filter((t) => t.type === "missing").length;
+  const extra = result.tokens.filter((t) => t.type === "extra").length;
   return (
     <View>
-      {!checked ? (
-        <>
-          {difficulty === "easy" && (
-            <Text
-              style={{ fontFamily: serifFont, color: "#9CA3AF" }}
-              className="text-base leading-7 mb-4 italic"
-            >
-              {card.verseText}
+      <Text style={{ fontFamily: serifFont }} className="text-lg leading-8 text-gray-900 dark:text-gray-100">
+        {result.tokens.map((token, i) => {
+          if (token.type === "match") return <Text key={i}>{token.expected} </Text>;
+          if (token.type === "missing") {
+            return (
+              <Text key={i} style={{ color: "#DC2626", fontWeight: "600", textDecorationLine: "underline" }}>
+                [{token.expected}]{" "}
+              </Text>
+            );
+          }
+          return (
+            <Text key={i} style={{ color: "#B45309", textDecorationLine: "line-through" }}>
+              {token.typed}{" "}
             </Text>
-          )}
-          {difficulty === "hard" && (
-            <View className="flex-row justify-end mb-2">
-              <View
-                className="rounded-full px-3 py-1"
-                style={{ backgroundColor: secondsLeft <= 10 ? "#DC262615" : "#4A6FA51A" }}
-              >
-                <Text
-                  className="text-xs font-bold"
-                  style={{ color: secondsLeft <= 10 ? "#DC2626" : "#4A6FA5" }}
-                >
-                  0:{secondsLeft.toString().padStart(2, "0")}
-                </Text>
-              </View>
-            </View>
-          )}
-          <TextInput
-            value={typed}
-            onChangeText={setTyped}
-            multiline
-            autoFocus
-            placeholder="Type the verse from memory…"
-            placeholderTextColor="#9CA3AF"
-            style={{ fontFamily: serifFont, minHeight: 140 }}
-            className="text-lg leading-8 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3"
-          />
-          <Pressable
-            onPress={() => setChecked(true)}
-            disabled={typed.trim().length === 0}
-            className="mt-6 rounded-2xl bg-brand-blue py-4 items-center active:opacity-80"
-            style={{ opacity: typed.trim().length === 0 ? 0.4 : 1 }}
-          >
-            <Text className="text-base font-semibold text-white">Check</Text>
-          </Pressable>
-        </>
-      ) : (
-        <>
-          <Text
-            style={{ fontFamily: serifFont }}
-            className="text-lg leading-8 text-gray-900 dark:text-gray-100"
-          >
-            {result!.tokens.map((token, index) => {
-              if (token.type === "match") {
-                return <Text key={index}>{token.expected} </Text>;
-              }
-              if (token.type === "missing") {
-                return (
-                  <Text key={index} style={{ color: "#DC2626" }}>
-                    {token.expected}{" "}
-                  </Text>
-                );
-              }
-              return (
-                <Text
-                  key={index}
-                  style={{ color: "#D97706", textDecorationLine: "line-through" }}
-                >
-                  {token.typed}{" "}
-                </Text>
-              );
-            })}
-          </Text>
-          <Text className="text-sm font-semibold text-gray-400 dark:text-gray-500 mt-4">
-            {Math.round(result!.accuracy * 100)}% accurate · red = missed, struck = extra
-          </Text>
-
-          <View className="mt-6">
-            <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
-              Grade your recall
-            </Text>
-            <GradeButtons srsState={card} suggestedGrade={suggestedGrade} onGrade={onGrade} />
-          </View>
-        </>
-      )}
+          );
+        })}
+      </Text>
+      <ResultLine
+        ok={result.accuracy >= 0.98}
+        text={`${Math.round(result.accuracy * 100)}% accurate${
+          missed || extra ? ` · [bracketed] words were missed${extra ? ", struck words were extra" : ""}` : ""
+        }`}
+      />
     </View>
   );
 }

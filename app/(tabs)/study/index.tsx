@@ -9,7 +9,7 @@ import { MemoryPanel } from "../../../components/study/memory-panel";
 import { serifFont } from "../../../constants/fonts";
 import { localDateString } from "../../../lib/date";
 import { doneDays, getPlan, isDayOpen, nextDay, readingsLabel, STUDY_PLANS, type StudyPlan } from "../../../lib/plans";
-import { isDue } from "../../../lib/srs";
+import { buildReviewQueue, isDue, newRemainingToday } from "../../../lib/memory";
 import { useAppStore } from "../../../store/useAppStore";
 
 const BLUE = "#4A6FA5";
@@ -33,7 +33,9 @@ export default function StudyScreen() {
   const planProgress = useAppStore((s) => s.planProgress);
   const memoryDeck = useAppStore((s) => s.memoryDeck);
   const active = getPlan(activePlanId);
-  const dueCount = memoryDeck.filter((c) => isDue(c.dueDate)).length;
+  const dueCount = memoryDeck.filter((c) => isDue(c)).length;
+  const newLeft = newRemainingToday(memoryDeck);
+  const queueSize = buildReviewQueue(memoryDeck).length;
 
   const openPlan = (plan: StudyPlan, day?: number | null) =>
     router.push({ pathname: "/study/plans/[id]", params: { id: plan.id, ...(day ? { day: String(day) } : {}) } });
@@ -56,7 +58,8 @@ export default function StudyScreen() {
           onPlan={(day) => (active ? openPlan(active, day) : setSide("plans"))}
           dueCount={dueCount}
           deckSize={memoryDeck.length}
-          onMemory={() => (memoryDeck.length > 0 ? router.push("/memory/review") : setSide("memory"))}
+          newLeft={newLeft}
+          onMemory={() => (queueSize > 0 ? router.push("/memory/review") : setSide("memory"))}
         />
 
         <View className="flex-row rounded-2xl bg-gray-100 dark:bg-gray-800 p-1 mt-6 mb-5">
@@ -131,12 +134,14 @@ function TodayCard({
   onPlan,
   dueCount,
   deckSize,
+  newLeft,
   onMemory,
 }: {
   active: StudyPlan | undefined;
   onPlan: (day: number | null) => void;
   dueCount: number;
   deckSize: number;
+  newLeft: number;
   onMemory: () => void;
 }) {
   const progress = useAppStore((s) => (active ? s.planProgress[active.id] : undefined));
@@ -165,9 +170,19 @@ function TodayCard({
   }
 
   const memoryTitle =
-    deckSize === 0 ? "Memorize a verse" : dueCount > 0 ? `${dueCount} ${dueCount === 1 ? "verse" : "verses"} to review` : "Memory all caught up";
+    deckSize === 0
+      ? "Memorize a verse"
+      : dueCount > 0
+        ? `${dueCount} ${dueCount === 1 ? "verse" : "verses"} to review`
+        : newLeft > 0
+          ? `${newLeft} new ${newLeft === 1 ? "verse" : "verses"} to learn`
+          : "Memory all caught up";
   const memorySub =
-    deckSize === 0 ? "Tap any verse while reading to add it" : dueCount > 0 ? "A few minutes keeps them fresh" : `Practice any of your ${deckSize} anytime`;
+    deckSize === 0
+      ? "Tap a verse while reading and choose Memorize"
+      : dueCount > 0 || newLeft > 0
+        ? "A few minutes keeps them fresh"
+        : `Practice any of your ${deckSize} anytime`;
 
   return (
     <View className="rounded-3xl bg-brand-blue/10 dark:bg-brand-blue/20 border border-brand-blue/20 overflow-hidden">
@@ -182,7 +197,7 @@ function TodayCard({
       <View className="h-px bg-brand-blue/15 mx-5" />
       <TodayRow
         icon="albums"
-        iconBg={dueCount > 0 ? EARTH : "#9CA3AF"}
+        iconBg={dueCount > 0 || newLeft > 0 ? EARTH : "#9CA3AF"}
         title={memoryTitle}
         sub={memorySub}
         onPress={onMemory}

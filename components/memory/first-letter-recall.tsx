@@ -1,135 +1,104 @@
-import { useMemo, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
 
 import { serifFont } from "../../constants/fonts";
 import { maskWord, pickBlankIndices, wordCore } from "../../lib/blank-words";
-import { suggestGradeFromAccuracy } from "../../lib/verse-diff";
-import { useAppStore, type MemoryCard } from "../../store/useAppStore";
-import { Difficulty, Grade } from "../../lib/srs";
-import { GradeButtons } from "./grade-buttons";
+import { ResultLine } from "./word-bank-recall";
 
-type WordResult = "pending" | "correct" | "incorrect";
+export type LetterTier = 0 | 1 | 2;
 
-// Easy/Medium/Hard map directly onto the three tiers — there's no separate
-// automatic progression, so the difficulty picker doubles as tier selection
-// and you can freely switch between Warm-up, Recall, and Mastery any time.
-const TIERS = [
-  { label: "Warm-up", fraction: 0 },
-  { label: "Recall", fraction: 0.5 },
-  { label: "Mastery", fraction: 1 },
-] as const;
+/** Warm-up hides a few words, Recall about half, Mastery all of them. Only hidden words are tested. */
+export const TIERS: { label: string; fraction: number; hint: string }[] = [
+  { label: "Warm-up", fraction: 0.25, hint: "A few words hidden" },
+  { label: "Recall", fraction: 0.55, hint: "About half hidden" },
+  { label: "Mastery", fraction: 1, hint: "Every word hidden" },
+];
 
-const TIER_INDEX_FOR_DIFFICULTY: Record<Difficulty, 0 | 1 | 2> = {
-  easy: 0,
-  medium: 1,
-  hard: 2,
-};
+const hasLetters = (w: string) => /[\p{L}\p{N}]/u.test(w);
 
-function hintForFraction(fraction: number): string {
-  if (fraction <= 0) return "Full verse shown";
-  if (fraction >= 1) return "Verse hidden";
-  return "Some words hidden";
-}
-
+/** Type the first letter of each hidden word, in order. Calls onComplete(accuracy) at the end. */
 export function FirstLetterRecall({
-  card,
-  onGrade,
+  text,
+  seed,
+  tier,
+  onComplete,
 }: {
-  card: MemoryCard;
-  onGrade: (grade: Grade) => void;
+  text: string;
+  seed: string;
+  tier: LetterTier;
+  onComplete: (accuracy: number) => void;
 }) {
-  const difficulty = useAppStore((state) => state.difficulty);
-  const words = useMemo(() => card.verseText.trim().split(/\s+/), [card.verseText]);
-  const tierIndex = TIER_INDEX_FOR_DIFFICULTY[difficulty];
-  const tierFraction = TIERS[tierIndex].fraction;
-  const tier = { label: TIERS[tierIndex].label, hint: hintForFraction(tierFraction) };
+  const words = useMemo(() => text.trim().split(/\s+/), [text]);
+  const hidden = useMemo(() => {
+    const picked = pickBlankIndices(words.length, TIERS[tier].fraction, `${seed}-fl`).filter((i) => hasLetters(words[i]));
+    if (picked.length) return picked;
+    const fallback = words.findIndex((w, i) => i >= Math.floor(words.length / 2) && wordCore(w).length > 2);
+    return [fallback >= 0 ? fallback : words.findIndex(hasLetters)].filter((i) => i >= 0);
+  }, [words, seed, tier]);
+  const hiddenSet = useMemo(() => new Set(hidden), [hidden]);
 
-  const blankSet = useMemo(
-    () => new Set(pickBlankIndices(words.length, tierFraction, card.id)),
-    [words.length, tierFraction, card.id]
-  );
-
-  const [results, setResults] = useState<WordResult[]>(() => words.map(() => "pending"));
+  const [results, setResults] = useState<boolean[]>([]);
   const [typed, setTyped] = useState("");
+  const inputRef = useRef<TextInput>(null);
+  const isComplete = results.length >= hidden.length;
+  const current = hidden[results.length];
+  const correctCount = results.filter(Boolean).length;
 
-  const currentIndex = results.findIndex((r) => r === "pending");
-  const isComplete = currentIndex === -1;
-
-  const handleChangeText = (text: string) => {
-    if (text.length === 0 || currentIndex === -1) {
-      setTyped("");
-      return;
-    }
-    const letter = text[text.length - 1];
-    const expected = wordCore(words[currentIndex]).slice(0, 1).toLowerCase();
-    const correct = letter.toLowerCase() === expected;
-    setResults((prev) => {
-      const next = [...prev];
-      next[currentIndex] = correct ? "correct" : "incorrect";
-      return next;
-    });
+  const answer = (letter: string | null) => {
+    if (isComplete) return;
+    const expected = wordCore(words[current]).slice(0, 1).toLowerCase();
+    setResults((r) => [...r, letter !== null && letter.toLowerCase() === expected]);
     setTyped("");
+    inputRef.current?.focus();
   };
 
-  const correctCount = results.filter((r) => r === "correct").length;
-  const accuracy = words.length === 0 ? 1 : correctCount / words.length;
-  const suggestedGrade = isComplete ? suggestGradeFromAccuracy(accuracy) : undefined;
+  useEffect(() => {
+    if (isComplete) onComplete(hidden.length ? correctCount / hidden.length : 1);
+  }, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View>
-      <View className="flex-row items-center mb-6" style={{ gap: 6 }}>
-        {TIERS.map(({ label }, i) => (
-          <View key={label} className="flex-1 flex-row items-center" style={{ gap: 6 }}>
-            <View
-              className="flex-1 rounded-full"
-              style={{
-                height: 4,
-                backgroundColor: i <= tierIndex ? "#4A6FA5" : "#E5E7EB",
-              }}
-            />
-          </View>
-        ))}
-      </View>
-      <Text className="text-xs font-semibold text-brand-blue uppercase tracking-wide mb-1">
-        {tier.label}
-      </Text>
-      <Text className="text-xs text-gray-400 dark:text-gray-500 mb-6">{tier.hint}</Text>
-
       <Text
         style={{ fontFamily: serifFont }}
         className="text-xl leading-9 text-gray-900 dark:text-gray-100"
+        accessibilityLabel={
+          isComplete
+            ? `${correctCount} of ${hidden.length} hidden words correct.`
+            : `Hidden word ${results.length + 1} of ${hidden.length}. Type its first letter.`
+        }
       >
         {words.map((word, index) => {
-          const result = results[index];
-          const isFocused = index === currentIndex;
-
-          if (result === "pending") {
-            const masked = blankSet.has(index);
+          if (!hiddenSet.has(index)) return <Text key={index}>{word} </Text>;
+          const k = hidden.indexOf(index);
+          if (k >= results.length) {
+            const focused = index === current;
             return (
               <Text key={index}>
                 <Text
                   style={{
-                    color: masked ? "#9CA3AF" : undefined,
-                    borderBottomWidth: isFocused ? 2 : 0,
+                    color: "#9CA3AF",
+                    borderBottomWidth: focused ? 2 : 0,
                     borderBottomColor: "#4A6FA5",
+                    backgroundColor: focused ? "#4A6FA51F" : undefined,
                   }}
                 >
-                  {masked ? maskWord(word) : word}
+                  {maskWord(word)}
                 </Text>{" "}
               </Text>
             );
           }
-
-          const correct = result === "correct";
+          const ok = results[k];
           return (
             <Text
               key={index}
               style={{
-                color: correct ? "#16A34A" : "#DC2626",
-                textDecorationLine: correct ? "none" : "line-through",
+                color: ok ? "#15803D" : "#DC2626",
+                fontWeight: "600",
+                textDecorationLine: ok ? "none" : "underline",
               }}
             >
-              {word}{" "}
+              {word}
+              {ok ? "" : " ✗"}{" "}
             </Text>
           );
         })}
@@ -137,30 +106,38 @@ export function FirstLetterRecall({
 
       {!isComplete ? (
         <View className="mt-8 items-center">
-          <Text className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-            Word {currentIndex + 1} of {words.length} · type its first letter
+          <Text className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Hidden word {results.length + 1} of {hidden.length} · type its first letter
           </Text>
           <TextInput
+            ref={inputRef}
             value={typed}
-            onChangeText={handleChangeText}
+            onChangeText={(t) => (t.length ? answer(t[t.length - 1]) : setTyped(""))}
             autoFocus
             autoCapitalize="none"
             autoCorrect={false}
             spellCheck={false}
+            accessibilityLabel={`First letter of hidden word ${results.length + 1}`}
             style={{ fontFamily: serifFont }}
             className="w-16 h-16 text-center text-2xl font-semibold rounded-2xl border-2 border-brand-blue text-gray-900 dark:text-white"
           />
+          <Pressable
+            onPress={() => answer(null)}
+            accessibilityRole="button"
+            accessibilityLabel="I don't know this word. Show it."
+            hitSlop={10}
+            className="mt-4 active:opacity-60"
+          >
+            <Text className="text-sm font-semibold text-gray-500 dark:text-gray-400">{"I don't know"}</Text>
+          </Pressable>
         </View>
       ) : (
-        <View className="mt-8">
-          <Text className="text-sm font-semibold text-gray-400 dark:text-gray-500 mb-4">
-            {correctCount} of {words.length} correct
-          </Text>
-          <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
-            How well did you recall it?
-          </Text>
-          <GradeButtons srsState={card} suggestedGrade={suggestedGrade} onGrade={onGrade} />
-        </View>
+        <ResultLine
+          ok={correctCount === hidden.length}
+          text={`${correctCount} of ${hidden.length} correct${
+            correctCount < hidden.length ? " · missed words are marked ✗ and underlined" : ""
+          }`}
+        />
       )}
     </View>
   );

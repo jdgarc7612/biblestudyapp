@@ -1,4 +1,5 @@
-import type { Difficulty } from "./srs";
+/** How much of a passage to blank: a few words, more, or all of them. */
+export type Difficulty = "easy" | "medium" | "hard";
 
 function hashSeed(str: string): number {
   let h = 0;

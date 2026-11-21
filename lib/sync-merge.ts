@@ -6,8 +6,10 @@
  * seconds after something changes, which is well inside Supabase's free plan.
  *
  * Merging two copies (this device and the account):
- * - Memory cards are combined by id; for a card on both, the more recently reviewed one wins.
- *   Removed cards are remembered so a sync never brings them back.
+ * - Memory cards are combined by id; for a card on both, the more recently changed one wins
+ *   (its schedule, review log and collections travel together). Older SM-2 cards from either
+ *   side are brought up to the FSRS shape first. Removed cards are remembered so a sync never
+ *   brings them back. The person's own memory lists are combined by id, newest edit wins.
  * - Each streak comes from the copy that logged a day most recently; best streaks take the higher.
  * - Study notes are combined by verse; for a note on both, the more recently edited one wins.
  * - Guided study progress is combined by plan, and answers by question; the more recently changed copy wins.
@@ -16,15 +18,14 @@
  *   joins an account that already has data, the account's copy wins, so a guest's starter
  *   tokens never replace a real balance.
  */
-import type { MemoryCard, useAppStore } from "../store/useAppStore";
+import { migrateCard, mergeLists, pickNewerCard, type MemoryCard } from "./memory";
+import type { useAppStore } from "../store/useAppStore";
 
 type Store = ReturnType<typeof useAppStore.getState>;
 
 const SCALAR_KEYS = [
   "tokenBalance",
-  "studyMode",
-  "typeSubMode",
-  "difficulty",
+  "memoryMethod",
   "displayName",
   "translation",
   "lastRead",
@@ -39,6 +40,7 @@ export const SYNCED_KEYS = [
   ...SCALAR_KEYS,
   "memoryDeck",
   "deletedCardIds",
+  "memoryLists",
   "verseNotes",
   "planProgress",
   "planAnswers",
@@ -67,28 +69,25 @@ export function snapshot(state: Store): SyncData {
 
 const union = <T,>(a: T[] = [], b: T[] = []) => Array.from(new Set([...a, ...b]));
 
-function pickCard(a: MemoryCard, b: MemoryCard): MemoryCard {
-  const ra = a.lastReviewed ?? "";
-  const rb = b.lastReviewed ?? "";
-  if (ra !== rb) return ra > rb ? a : b;
-  return b.repetitions > a.repetitions ? b : a;
-}
 
 /** Combines this device's copy with the account's. `accountFirst`: the account's settings win. */
 export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: boolean): SyncData {
   const newer = accountFirst || remote.updatedAt >= local.updatedAt ? remote : local;
   const merged = { ...newer } as SyncData;
   for (const key of SCALAR_KEYS) (merged as Record<string, unknown>)[key] = newer[key];
+  merged.memoryMethod = newer.memoryMethod ?? local.memoryMethod ?? "smart";
 
   const deleted = union(local.deletedCardIds, remote.deletedCardIds).slice(-500);
   const cards = new Map<string, MemoryCard>();
-  for (const card of [...(remote.memoryDeck ?? []), ...(local.memoryDeck ?? [])]) {
-    if (deleted.includes(card.id)) continue;
+  for (const raw of [...(remote.memoryDeck ?? []), ...(local.memoryDeck ?? [])]) {
+    if (deleted.includes(raw.id)) continue;
+    const card = migrateCard(raw);
     const existing = cards.get(card.id);
-    cards.set(card.id, existing ? pickCard(existing, card) : card);
+    cards.set(card.id, existing ? pickNewerCard(existing, card) : card);
   }
   merged.memoryDeck = [...cards.values()].sort((x, y) => x.dateAdded.localeCompare(y.dateAdded));
   merged.deletedCardIds = deleted;
+  merged.memoryLists = mergeLists(local.memoryLists, remote.memoryLists);
 
   const notes = { ...(remote.verseNotes ?? {}) };
   for (const [id, note] of Object.entries(local.verseNotes ?? {})) {
