@@ -42,3 +42,23 @@ export function notesCovering(
     .filter((n) => n.book === book && n.chapter === chapter && n.start <= end && n.end >= start)
     .sort(byPassage);
 }
+
+export interface SelectionNoteStatus {
+  /** The selected verse or range has its own note (the one the Notes tab edits). */
+  own: boolean;
+  /** Notes with text that overlap the selection, its own note included. */
+  count: number;
+}
+
+/** Whether a selection already has a note, for the Read tab's Note action. */
+export function selectionNoteStatus(
+  notes: Record<string, VerseNote>,
+  book: string,
+  chapter: number,
+  start: number,
+  end: number
+): SelectionNoteStatus {
+  const covering = notesCovering(notes, book, chapter, start, end);
+  const own = covering.some((n) => n.book === book && n.chapter === chapter && n.start === start && n.end === end);
+  return { own, count: covering.length };
+}

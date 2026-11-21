@@ -29,9 +29,12 @@ import {
   verseRangeId,
 } from "../../../../lib/bible";
 import { localDateString } from "../../../../lib/date";
+import { selectionNoteStatus } from "../../../../lib/notes";
 import { useAppStore } from "../../../../store/useAppStore";
 
 const READ_ENGAGEMENT_SECONDS = 20;
+const BLUE = "#4A6FA5";
+const EARTH = "#C19A6B";
 
 // Stops the browser from highlighting text while swiping the action bar on the web.
 const NO_SELECT = Platform.OS === "web" ? ({ userSelect: "none" } as object) : undefined;
@@ -255,6 +258,10 @@ function ChapterReader({
       ? verseRangeId(bookId, chapterNum, rangeStart, rangeEnd)
       : null;
   const isInDeck = cardId ? memoryDeck.some((c) => c.id === cardId) : false;
+  const noteStatus =
+    rangeStart !== null && rangeEnd !== null
+      ? selectionNoteStatus(verseNotes, bookId, chapterNum, rangeStart, rangeEnd)
+      : { own: false, count: 0 };
 
   const goToAI = (autoAsk?: "insights", question?: string) => {
     clearSelection();
@@ -427,55 +434,62 @@ function ChapterReader({
             onPress={clearSelection}
             hitSlop={8}
             className="p-1 mr-2 active:opacity-60"
-            accessibilityLabel="Clear selection"
+            accessibilityRole="button"
+            accessibilityLabel={`Clear selection of ${verseReference}`}
           >
             <Ionicons name="close" size={20} color="#9CA3AF" />
           </Pressable>
-          <Pressable onPress={() => openStudyPanel()} className="flex-1 active:opacity-70">
+          <Pressable
+            onPress={() => openStudyPanel()}
+            className="flex-1 mr-1 active:opacity-70"
+            accessibilityRole="button"
+            accessibilityLabel={`Open the study panel for ${verseReference}`}
+          >
             <Text className="text-sm font-semibold text-brand-blue" numberOfLines={1}>
               {verseReference}
             </Text>
             <Text className="text-[10px] text-gray-400 dark:text-gray-500" numberOfLines={1}>Original words, cross-refs, context, notes</Text>
           </Pressable>
-          <View className="flex-row" style={{ gap: 4 }}>
-            <Pressable
+          <View className="flex-row" style={{ gap: 2 }}>
+            <BarAction
+              icon={isInDeck ? "albums" : "albums-outline"}
+              label={isInDeck ? "In Memory" : "Memorize"}
+              color={EARTH}
               onPress={() => toggleMemoryDeck()}
-              hitSlop={8}
-              className="p-2 active:opacity-60"
-              accessibilityLabel={isInDeck ? "Remove from Memory Deck" : "Add to Memory Deck"}
-            >
-              <Ionicons
-                name={isInDeck ? "bookmark" : "bookmark-outline"}
-                size={20}
-                color="#C19A6B"
-              />
-            </Pressable>
-            <Pressable
-              onPress={() => goToAI("insights")}
-              hitSlop={8}
-              className="p-2 active:opacity-60"
-              accessibilityLabel="Get Insights"
-            >
-              <Ionicons name="sparkles-outline" size={20} color="#4A6FA5" />
-            </Pressable>
-            <Pressable
+              accessibilityLabel={
+                isInDeck ? `Remove ${verseReference} from Memory` : `Add ${verseReference} to Memory`
+              }
+              accessibilityState={{ selected: isInDeck }}
+            />
+            <BarAction
+              icon={noteStatus.own ? "create" : "create-outline"}
+              label={noteStatus.own ? "Edit note" : noteStatus.count ? `Notes · ${noteStatus.count}` : "Note"}
+              color={BLUE}
+              dot={noteStatus.count > 0}
+              onPress={() => openStudyPanel("note")}
+              accessibilityLabel={
+                noteStatus.own
+                  ? `Edit your note on ${verseReference}`
+                  : noteStatus.count
+                    ? `Write a note on ${verseReference}. You have ${noteStatus.count} ${noteStatus.count === 1 ? "note" : "notes"} on these verses`
+                    : `Write a note on ${verseReference}`
+              }
+            />
+            <BarAction
+              icon="chatbubble-ellipses-outline"
+              label="Ask AI"
+              color={BLUE}
               onPress={() => goToAI()}
-              hitSlop={8}
-              className="p-2 active:opacity-60"
-              accessibilityLabel="Ask AI"
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4A6FA5" />
-            </Pressable>
-            <Pressable
+              accessibilityLabel={`Ask AI about ${verseReference}`}
+            />
+            <BarAction
+              icon="school"
+              label="Study"
+              color={BLUE}
+              filled
               onPress={() => openStudyPanel()}
-              hitSlop={8}
-              className="flex-row items-center rounded-full px-3 py-1.5 ml-1 active:opacity-70"
-              style={{ backgroundColor: "#4A6FA5" }}
-              accessibilityLabel="Study this verse"
-            >
-              <Ionicons name="school-outline" size={15} color="#FFFFFF" />
-              <Text className="text-xs font-semibold text-white ml-1">Study</Text>
-            </Pressable>
+              accessibilityLabel={`Study ${verseReference}: original words, cross-references, context`}
+            />
           </View>
         </View>
       ) : (
@@ -539,5 +553,61 @@ function ChapterReader({
         />
       )}
     </SafeAreaView>
+  );
+}
+
+/** One action on the verse selection bar: an icon with a short word under it, so nothing is a guess. */
+function BarAction({
+  icon,
+  label,
+  color,
+  onPress,
+  accessibilityLabel,
+  accessibilityState,
+  dot = false,
+  filled = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+  accessibilityState?: { selected?: boolean };
+  dot?: boolean;
+  filled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8 }}
+      className="items-center justify-center rounded-xl px-1 py-1 active:opacity-60"
+      style={{ minWidth: 50 }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
+    >
+      <View
+        className="items-center justify-center rounded-full"
+        style={{ width: 30, height: 26, backgroundColor: filled ? color : "transparent" }}
+      >
+        <Ionicons name={icon} size={filled ? 16 : 20} color={filled ? "#FFFFFF" : color} />
+        {dot && (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 1,
+              width: 7,
+              height: 7,
+              borderRadius: 4,
+              backgroundColor: EARTH,
+            }}
+          />
+        )}
+      </View>
+      <Text className="text-[10px] font-semibold mt-0.5" style={{ color }} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
