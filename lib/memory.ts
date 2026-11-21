@@ -16,7 +16,17 @@ import {
   type MemorySrs,
 } from "./srs";
 
-export type MemoryMethod = "smart" | "flashcard" | "blanks" | "firstLetter" | "type";
+export type MemoryMethod =
+  | "smart"
+  | "flashcard"
+  | "blanks"
+  | "firstLetter"
+  | "type"
+  | "listen"
+  | "recite"
+  | "reference"
+  /** A passage of three or more verses, one join at a time, then the whole. */
+  | "stitch";
 /** What a recall exercise actually ran as. "learn" is the guided first sitting. */
 export type RecallMethod = Exclude<MemoryMethod, "smart"> | "learn";
 export type SessionKind = "review" | "practice";
@@ -377,14 +387,172 @@ export function buildReviewQueue(deck: MemoryCard[], now: Date = new Date()): st
   return out;
 }
 
-/** How Smart picks a method for a card it isn't introducing for the first time. */
-export function smartMethod(card: MemoryCard): Exclude<MemoryMethod, "smart"> {
+/** How many verses a card spans. */
+export const verseSpan = (card: Pick<MemoryCard, "start" | "end">) => Math.max(1, card.end - card.start + 1);
+
+/** Passages this long can be practiced in order, one join at a time. */
+export const STITCH_MIN_VERSES = 3;
+
+export const canStitch = (card: Pick<MemoryCard, "start" | "end">) => verseSpan(card) >= STITCH_MIN_VERSES;
+
+/**
+ * How Smart picks a method for a card it isn't introducing for the first time.
+ * `passageWarm`: verses of this passage were already practiced in this sitting, so a long
+ * passage is put together join by join.
+ */
+export function smartMethod(card: MemoryCard, opts: { passageWarm?: boolean } = {}): Exclude<MemoryMethod, "smart"> {
+  if (opts.passageWarm && canStitch(card)) return "stitch";
   const last = card.log[card.log.length - 1];
   const weak = last ? last.grade === "again" || last.grade === "hard" || (last.accuracy ?? 1) < 0.9 : false;
   if (card.srs.state === SrsStateId.Relearning || weak) return "blanks";
   if (card.srs.state === SrsStateId.Learning || card.srs.scheduled_days < 7) return "firstLetter";
+  // Now and then, a verse that's strong on wording is asked for its address instead.
+  const recentReference = card.log.slice(-3).some((e) => e.method === "reference");
+  if (card.srs.scheduled_days >= 14 && !recentReference && card.srs.reps % 3 === 0) return "reference";
   if (card.srs.scheduled_days < 21) return "flashcard";
   return "type";
+}
+
+// ---------------------------------------------------------------------------
+// Long passages: the whole and its verses
+
+/**
+ * The single-verse cards inside a passage card (same book and chapter, within its range), in
+ * verse order. Grouping comes from the ids, so a reader range and a pack work the same way.
+ */
+export function passageMembers(whole: MemoryCard, deck: MemoryCard[]): MemoryCard[] {
+  if (!canStitch(whole)) return [];
+  return deck
+    .filter(
+      (c) =>
+        c.id !== whole.id &&
+        c.book === whole.book &&
+        c.chapter === whole.chapter &&
+        c.start === c.end &&
+        c.start >= whole.start &&
+        c.end <= whole.end
+    )
+    .sort((a, b) => a.start - b.start);
+}
+
+/** A passage session: its verses in order, then the whole passage. */
+export function passageOrder(wholeId: string, deck: MemoryCard[]): string[] {
+  const whole = deck.find((c) => c.id === wholeId);
+  if (!whole) return [];
+  return [...passageMembers(whole, deck).map((c) => c.id), whole.id];
+}
+
+/**
+ * Reorders a session queue so a long passage reads as one work: wherever any of its verses or
+ * the whole passage appear, they're gathered at the first one's place, verses in order and the
+ * whole passage last. Everything else keeps its order. No ids are added or dropped.
+ */
+export function stitchOrder(queue: string[], deck: MemoryCard[]): string[] {
+  const byId = new Map(deck.map((c) => [c.id, c]));
+  const inQueue = new Set(queue);
+  const placed = new Set<string>();
+  const groupAt = new Map<string, string[]>();
+  const wholes = queue.map((id) => byId.get(id)).filter((c): c is MemoryCard => !!c && canStitch(c));
+  // Wholes whose verses are queued but which aren't due themselves still group those verses.
+  for (const card of deck) if (canStitch(card) && !inQueue.has(card.id)) wholes.push(card);
+  for (const whole of wholes) {
+    const members = passageMembers(whole, deck).filter((c) => inQueue.has(c.id) && !placed.has(c.id));
+    const group = [...members.map((c) => c.id), ...(inQueue.has(whole.id) && !placed.has(whole.id) ? [whole.id] : [])];
+    if (group.length < 2) continue;
+    const first = queue.find((id) => group.includes(id))!;
+    groupAt.set(first, group);
+    group.forEach((id) => placed.add(id));
+  }
+  const out: string[] = [];
+  for (const id of queue) {
+    const group = groupAt.get(id);
+    if (group) out.push(...group);
+    else if (!placed.has(id)) out.push(id);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Progress and reminders
+
+export interface DeckSummary {
+  due: number;
+  learning: number;
+  secure: number;
+  new: number;
+}
+
+/** Counts for the progress view. Learning covers everything on its way to Secure. */
+export function deckSummary(deck: MemoryCard[], now: Date = new Date()): DeckSummary {
+  const out: DeckSummary = { due: 0, learning: 0, secure: 0, new: 0 };
+  for (const card of deck) {
+    const status = cardStatus(card, now);
+    if (status === "due") out.due++;
+    else if (status === "new") out.new++;
+    else if (status === "secure") out.secure++;
+    else out.learning++;
+  }
+  return out;
+}
+
+/** The last `days` local dates (oldest first) with how many recalls were graded on each. */
+export function practiceDays(deck: MemoryCard[], days = 7, now: Date = new Date()): { date: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const card of deck) {
+    for (const entry of card.log) {
+      const date = localDateString(new Date(entry.at));
+      counts.set(date, (counts.get(date) ?? 0) + 1);
+    }
+  }
+  const out: { date: string; count: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const date = localDateString(d);
+    out.push({ date, count: counts.get(date) ?? 0 });
+  }
+  return out;
+}
+
+/**
+ * How many due verses to remind about on Home today: 0 once a Review session has been finished
+ * today (a verse missed in it comes back later without another nudge) or the reminder was put
+ * away for today.
+ */
+export function reviewNudgeCount(
+  deck: MemoryCard[],
+  reviewDoneDate: string | null | undefined,
+  dismissedDate: string | null | undefined,
+  now: Date = new Date()
+): number {
+  const today = localDateString(now);
+  if (reviewDoneDate === today || dismissedDate === today) return 0;
+  return deck.filter((c) => isDue(c, now)).length;
+}
+
+/**
+ * When to send phone reminders over the next `days` days: at the chosen time on each day that
+ * has verses due, skipping today once Review is done and any time already past.
+ */
+export function reminderDates(
+  deck: MemoryCard[],
+  opts: { hour: number; minute: number; reviewDoneDate?: string | null; days?: number },
+  now: Date = new Date()
+): Date[] {
+  const today = localDateString(now);
+  const dueDays = deck.filter((c) => !isNew(c)).map((c) => dueDateOf(c.srs));
+  const out: Date[] = [];
+  for (let i = 0; i < (opts.days ?? 7); i++) {
+    const at = new Date(now);
+    at.setDate(at.getDate() + i);
+    at.setHours(opts.hour, opts.minute, 0, 0);
+    const day = localDateString(at);
+    if (at.getTime() <= now.getTime()) continue;
+    if (day === today && opts.reviewDoneDate === today) continue;
+    if (!dueDays.some((d) => d <= day)) continue;
+    out.push(at);
+  }
+  return out;
 }
 
 /**
@@ -401,8 +569,18 @@ export function isPerfectSession(entries: { grade: Grade; accuracy?: number }[])
 // ---------------------------------------------------------------------------
 // Sync
 
-/** The more recently changed copy of a card (both normalized first). */
+/**
+ * The more recently changed copy of a card (both normalized first). Its schedule and log win;
+ * list and pack tags from both copies are kept, so a tag added on the other device stays.
+ */
 export function pickNewerCard(a: MemoryCard, b: MemoryCard): MemoryCard {
+  const newer = newerCopy(a, b);
+  const older = newer === a ? b : a;
+  const extra = older.collections.filter((c) => !newer.collections.includes(c));
+  return extra.length ? { ...newer, collections: [...newer.collections, ...extra] } : newer;
+}
+
+function newerCopy(a: MemoryCard, b: MemoryCard): MemoryCard {
   if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
   const ra = a.srs.last_review ?? "";
   const rb = b.srs.last_review ?? "";

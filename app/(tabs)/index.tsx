@@ -11,7 +11,7 @@ import { useCrossReferences, useCrossReferenceText, type CrossReference } from "
 import { localDateString } from "../../lib/date";
 import { listNotes, notesCovering, type NoteEntry } from "../../lib/notes";
 import { finishedADayOn, getPlan, nextDay, readingsLabel } from "../../lib/plans";
-import { isDue } from "../../lib/memory";
+import { isDue, reviewNudgeCount } from "../../lib/memory";
 import { getVerseOfTheDay } from "../../lib/verse-of-the-day";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -56,6 +56,9 @@ export default function HomeScreen() {
   const lastRead = useAppStore((s) => s.lastRead);
   const memoryDeck = useAppStore((s) => s.memoryDeck);
   const addToMemoryDeck = useAppStore((s) => s.addToMemoryDeck);
+  const reviewDoneDate = useAppStore((s) => s.memoryReviewDoneDate);
+  const nudgeDismissedDate = useAppStore((s) => s.memoryNudgeDismissedDate);
+  const dismissMemoryNudge = useAppStore((s) => s.dismissMemoryNudge);
   const verseNotes = useAppStore((s) => s.verseNotes);
   const activePlan = getPlan(useAppStore((s) => s.activePlanId));
   const planProgress = useAppStore((s) => (activePlan ? s.planProgress[activePlan.id] : undefined));
@@ -153,6 +156,12 @@ export default function HomeScreen() {
             </Pressable>
           </Link>
         </View>
+
+        <ReviewNudge
+          count={reviewNudgeCount(memoryDeck, reviewDoneDate, nudgeDismissedDate, new Date())}
+          onReview={() => router.push("/memory/review")}
+          onDismiss={dismissMemoryNudge}
+        />
 
         <AskBar onAsk={(q) => router.push({ pathname: "/ai", params: { question: q } })} />
 
@@ -324,6 +333,41 @@ export default function HomeScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Once a day, while memory verses are due and Review hasn't been finished today. It goes away
+ * after Review (even if a missed verse comes back later) or when put away for the day.
+ */
+function ReviewNudge({ count, onReview, onDismiss }: { count: number; onReview: () => void; onDismiss: () => void }) {
+  if (count === 0) return null;
+  const verses = `${count} memory ${count === 1 ? "verse is" : "verses are"}`;
+  return (
+    <View
+      className="flex-row items-center rounded-2xl bg-brand-earth/10 dark:bg-brand-earth/15 border border-brand-earth/25 pl-4 pr-2 py-3 mb-4"
+      accessibilityRole="summary"
+    >
+      <View className="w-9 h-9 rounded-full items-center justify-center mr-3" style={{ backgroundColor: EARTH }}>
+        <Ionicons name="albums" size={16} color="#FFFFFF" />
+      </View>
+      <Pressable onPress={onReview} accessibilityRole="button" accessibilityLabel={`${verses} ready for review. Start review`} className="flex-1 active:opacity-70">
+        <Text className="text-[15px] font-semibold text-gray-900 dark:text-white">{verses} ready</Text>
+        <Text className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">A few minutes keeps them fresh</Text>
+      </Pressable>
+      <Pressable
+        onPress={onReview}
+        accessibilityRole="button"
+        accessibilityLabel="Start review"
+        className="rounded-full px-4 py-2 ml-2 active:opacity-80"
+        style={{ backgroundColor: BLUE }}
+      >
+        <Text className="text-sm font-semibold text-white">Review</Text>
+      </Pressable>
+      <Pressable onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Not today. Hide this reminder until tomorrow" hitSlop={8} className="p-2 ml-1 active:opacity-60">
+        <Ionicons name="close" size={16} color="#9CA3AF" />
+      </Pressable>
+    </View>
   );
 }
 

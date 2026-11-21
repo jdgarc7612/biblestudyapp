@@ -9,18 +9,26 @@ import { FirstLetterRecall, TIERS, type LetterTier } from "../../components/memo
 import { FlashcardRecall } from "../../components/memory/flashcard-recall";
 import { GradeButtons } from "../../components/memory/grade-buttons";
 import { LearnFlow } from "../../components/memory/learn-flow";
-import { METHODS } from "../../components/memory/methods";
+import { ListenRecall } from "../../components/memory/listen-recall";
+import { METHODS, STITCH_METHOD } from "../../components/memory/methods";
+import { ReciteRecall } from "../../components/memory/recite-recall";
+import { ReferenceQuiz } from "../../components/memory/reference-quiz";
+import { StitchRecall } from "../../components/memory/stitch-recall";
 import { TypingRecall } from "../../components/memory/typing-recall";
 import { WordBankRecall, type BlankLevel } from "../../components/memory/word-bank-recall";
 import { getPack } from "../../data/study/memory-packs";
 import {
   buildReviewQueue,
+  canStitch,
   isDue,
   isNew,
   isPerfectSession,
+  passageMembers,
+  passageOrder,
   previewOutcomes,
   smartMethod,
   sortDeck,
+  stitchOrder,
   type MemoryCard,
   type MemoryMethod,
   type RecallMethod,
@@ -43,12 +51,14 @@ const LEVELS: { id: BlankLevel; label: string }[] = [
 /**
  * A Memory session.
  * - Review (default): today's due verses plus a few new ones, snapshotted when it opens.
- * - Practice (?mode=practice, optionally &ids=a,b or &collection=pack-peace): extra rehearsal
- *   that never pushes a verse further out.
+ * - Practice (?mode=practice, optionally &ids=a,b, &collection=pack-peace, or &passage=<id> for a
+ *   long passage's verses in order and then the whole): extra rehearsal that never pushes a verse
+ *   further out.
+ * A long passage and its verses are kept together in order wherever they come up.
  */
 export default function MemorySessionScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: string; ids?: string; collection?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; ids?: string; collection?: string; passage?: string }>();
   const kind: SessionKind = params.mode === "practice" ? "practice" : "review";
 
   const memoryDeck = useAppStore((s) => s.memoryDeck);
@@ -56,19 +66,21 @@ export default function MemorySessionScreen() {
   const memoryLists = useAppStore((s) => s.memoryLists);
   const currentStreak = useAppStore((s) => s.currentMemoryStreak);
   const saveGradedCard = useAppStore((s) => s.saveGradedCard);
+  const markMemoryReviewDone = useAppStore((s) => s.markMemoryReviewDone);
   const restoreMemoryCard = useAppStore((s) => s.restoreMemoryCard);
   const awardPerfectRecallBonus = useAppStore((s) => s.awardPerfectRecallBonus);
 
   // The queue is fixed when the session opens, so grading never reshuffles it.
   const queue = useMemo(() => {
     const deck = useAppStore.getState().memoryDeck;
-    if (kind === "review") return buildReviewQueue(deck);
+    if (kind === "review") return stitchOrder(buildReviewQueue(deck), deck);
+    if (params.passage) return passageOrder(params.passage, deck);
     if (params.ids) {
       const wanted = params.ids.split(",");
       return wanted.filter((id) => deck.some((c) => c.id === id));
     }
     const pool = params.collection ? deck.filter((c) => c.collections.includes(params.collection!)) : deck;
-    return sortDeck(pool).map((c) => c.id);
+    return stitchOrder(sortDeck(pool).map((c) => c.id), deck);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [index, setIndex] = useState(0);
@@ -89,11 +101,15 @@ export default function MemorySessionScreen() {
   };
 
   const learning = !!card && isNew(card);
-  const method: Exercise | "learn" = !card
-    ? "flashcard"
-    : learning
-      ? "learn"
-      : (chosen ?? (defaultMethod === "smart" ? smartMethod(card) : defaultMethod));
+  // A long passage whose verses were just practiced (or a passage session) is put together in order.
+  const passageWarm =
+    !!card && canStitch(card) && (params.passage === card.id || passageMembers(card, memoryDeck).some((m) => history.some((h) => h.before.id === m.id)));
+  const pickFor = (c: MemoryCard): Exercise => {
+    if (passageWarm) return "stitch";
+    if (defaultMethod === "smart" || defaultMethod === "stitch") return smartMethod(c);
+    return defaultMethod;
+  };
+  const method: Exercise | "learn" = !card ? "flashcard" : learning ? "learn" : (chosen ?? pickFor(card));
 
   // Smart sets the cue level from how the verse is doing.
   useEffect(() => {
@@ -134,8 +150,10 @@ export default function MemorySessionScreen() {
   useEffect(() => {
     if (!isComplete || bonusChecked.current || kind !== "review") return;
     bonusChecked.current = true;
+    // Finishing Review (or opening it with nothing due) puts Home's reminder away for today.
+    markMemoryReviewDone();
     if (isPerfectSession(history)) awardPerfectRecallBonus();
-  }, [isComplete, kind, history, awardPerfectRecallBonus]);
+  }, [isComplete, kind, history, awardPerfectRecallBonus, markMemoryReviewDone]);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace({ pathname: "/study", params: { tab: "memory" } }));
   const done = () => router.dismissTo({ pathname: "/study", params: { tab: "memory" } });
@@ -160,9 +178,13 @@ export default function MemorySessionScreen() {
   const sessionTitle =
     kind === "review"
       ? "Review"
-      : params.collection
-        ? `Practice · ${getPack(params.collection)?.title ?? memoryLists[params.collection]?.name ?? "Collection"}`
-        : "Practice";
+      : params.passage
+        ? "Practice · In order"
+        : params.collection
+          ? `Practice · ${getPack(params.collection)?.title ?? memoryLists[params.collection]?.name ?? "Collection"}`
+          : "Practice";
+  // The reference quiz asks for the address, so it stays hidden until answered.
+  const hideReference = method === "reference" && !result;
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top", "bottom"]}>
@@ -218,13 +240,20 @@ export default function MemorySessionScreen() {
         >
           <View className="flex-row items-baseline mb-4">
             <Text className="text-lg font-bold text-brand-blue" accessibilityRole="header">
-              {card.verseReference}
+              {hideReference ? "Which verse is this?" : card.verseReference}
             </Text>
             <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 ml-2">{card.translation}</Text>
           </View>
 
           {!learning && !result && (
-            <MethodPicker value={method as Exercise} onChange={(m) => { setChosen(m); setAttempt((a) => a + 1); }} />
+            <MethodPicker
+              value={method as Exercise}
+              stitch={canStitch(card)}
+              onChange={(m) => {
+                setChosen(m);
+                setAttempt((a) => a + 1);
+              }}
+            />
           )}
           {!learning && !result && method === "blanks" && (
             <Segments label="Blanks" options={LEVELS} value={level} onChange={(v) => { setLevel(v); setAttempt((a) => a + 1); }} />
@@ -250,6 +279,26 @@ export default function MemorySessionScreen() {
               <FirstLetterRecall text={card.verseText} seed={card.id} tier={tier} onComplete={(a) => setResult({ accuracy: a, at: new Date() })} />
             )}
             {method === "type" && <TypingRecall text={card.verseText} onComplete={(a) => setResult({ accuracy: a, at: new Date() })} />}
+            {method === "listen" && (
+              <ListenRecall
+                reference={card.verseReference}
+                text={card.verseText}
+                onComplete={() => setResult({ at: new Date() })}
+                onRecite={() => {
+                  setChosen("recite");
+                  setAttempt((a) => a + 1);
+                }}
+              />
+            )}
+            {method === "recite" && (
+              <ReciteRecall reference={card.verseReference} text={card.verseText} onComplete={() => setResult({ at: new Date() })} />
+            )}
+            {method === "reference" && (
+              <ReferenceQuiz card={card} deck={memoryDeck} onComplete={(a) => setResult({ accuracy: a, at: new Date() })} />
+            )}
+            {method === "stitch" && (
+              <StitchRecall card={card} warm={passageWarm} onComplete={(a) => setResult({ accuracy: a, at: new Date() })} />
+            )}
           </View>
 
           {outcomes && result && (
@@ -266,7 +315,12 @@ export default function MemorySessionScreen() {
       ) : (
         <View className="flex-1 items-center justify-center px-8">
           <Text className="text-base text-gray-500 dark:text-gray-400 text-center mb-6">This verse was removed from your deck.</Text>
-          <Pressable onPress={() => setIndex((i) => i + 1)} accessibilityRole="button" className="rounded-2xl bg-brand-blue px-8 py-3.5 active:opacity-80">
+          <Pressable
+            onPress={() => setIndex((i) => i + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Skip to the next verse"
+            className="rounded-2xl bg-brand-blue px-8 py-3.5 active:opacity-80"
+          >
             <Text className="text-base font-semibold text-white">Skip</Text>
           </Pressable>
         </View>
@@ -275,10 +329,11 @@ export default function MemorySessionScreen() {
   );
 }
 
-function MethodPicker({ value, onChange }: { value: Exercise; onChange: (m: Exercise) => void }) {
+function MethodPicker({ value, stitch, onChange }: { value: Exercise; stitch: boolean; onChange: (m: Exercise) => void }) {
+  const options = [...(stitch ? [STITCH_METHOD] : []), ...METHODS.filter((m) => m.id !== "smart")];
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }} className="mb-3">
-      {METHODS.filter((m) => m.id !== "smart").map((m) => {
+      {options.map((m) => {
         const on = m.id === value;
         return (
           <Pressable

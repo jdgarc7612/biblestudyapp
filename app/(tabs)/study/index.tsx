@@ -9,7 +9,7 @@ import { MemoryPanel } from "../../../components/study/memory-panel";
 import { serifFont } from "../../../constants/fonts";
 import { localDateString } from "../../../lib/date";
 import { doneDays, getPlan, isDayOpen, nextDay, readingsLabel, STUDY_PLANS, type StudyPlan } from "../../../lib/plans";
-import { buildReviewQueue, isDue, newRemainingToday } from "../../../lib/memory";
+import { buildReviewQueue, isDue, newRemainingToday, reviewNudgeCount } from "../../../lib/memory";
 import { useAppStore } from "../../../store/useAppStore";
 
 const BLUE = "#4A6FA5";
@@ -32,6 +32,7 @@ export default function StudyScreen() {
   const activePlanId = useAppStore((s) => s.activePlanId);
   const planProgress = useAppStore((s) => s.planProgress);
   const memoryDeck = useAppStore((s) => s.memoryDeck);
+  const reviewDoneDate = useAppStore((s) => s.memoryReviewDoneDate);
   const active = getPlan(activePlanId);
   const dueCount = memoryDeck.filter((c) => isDue(c)).length;
   const newLeft = newRemainingToday(memoryDeck);
@@ -59,6 +60,8 @@ export default function StudyScreen() {
           dueCount={dueCount}
           deckSize={memoryDeck.length}
           newLeft={newLeft}
+          nudge={reviewNudgeCount(memoryDeck, reviewDoneDate, null) > 0}
+          reviewedToday={reviewDoneDate === localDateString()}
           onMemory={() => (queueSize > 0 ? router.push("/memory/review") : setSide("memory"))}
         />
 
@@ -135,6 +138,8 @@ function TodayCard({
   dueCount,
   deckSize,
   newLeft,
+  nudge,
+  reviewedToday,
   onMemory,
 }: {
   active: StudyPlan | undefined;
@@ -142,6 +147,9 @@ function TodayCard({
   dueCount: number;
   deckSize: number;
   newLeft: number;
+  /** Verses are due and Review hasn't been finished today. */
+  nudge: boolean;
+  reviewedToday: boolean;
   onMemory: () => void;
 }) {
   const progress = useAppStore((s) => (active ? s.planProgress[active.id] : undefined));
@@ -172,17 +180,29 @@ function TodayCard({
   const memoryTitle =
     deckSize === 0
       ? "Memorize a verse"
-      : dueCount > 0
-        ? `${dueCount} ${dueCount === 1 ? "verse" : "verses"} to review`
-        : newLeft > 0
-          ? `${newLeft} new ${newLeft === 1 ? "verse" : "verses"} to learn`
-          : "Memory all caught up";
+      : nudge
+        ? `${dueCount} ${dueCount === 1 ? "verse" : "verses"} due today`
+        : reviewedToday
+          ? "Reviewed today"
+          : dueCount > 0
+            ? `${dueCount} ${dueCount === 1 ? "verse" : "verses"} to review`
+            : newLeft > 0
+              ? `${newLeft} new ${newLeft === 1 ? "verse" : "verses"} to learn`
+              : "Memory all caught up";
   const memorySub =
     deckSize === 0
       ? "Tap a verse while reading and choose Memorize"
-      : dueCount > 0 || newLeft > 0
-        ? "A few minutes keeps them fresh"
-        : `Practice any of your ${deckSize} anytime`;
+      : nudge
+        ? "Not reviewed yet today · a few minutes keeps them fresh"
+        : reviewedToday
+          ? dueCount > 0
+            ? `${dueCount} to go over again later · or practice anytime`
+            : newLeft > 0
+              ? `${newLeft} new ${newLeft === 1 ? "verse" : "verses"} ready to learn`
+              : "Practice anytime; it won't change your schedule"
+          : dueCount > 0 || newLeft > 0
+            ? "A few minutes keeps them fresh"
+            : `Practice any of your ${deckSize} anytime`;
 
   return (
     <View className="rounded-3xl bg-brand-blue/10 dark:bg-brand-blue/20 border border-brand-blue/20 overflow-hidden">
@@ -196,10 +216,11 @@ function TodayCard({
       />
       <View className="h-px bg-brand-blue/15 mx-5" />
       <TodayRow
-        icon="albums"
-        iconBg={dueCount > 0 || newLeft > 0 ? EARTH : "#9CA3AF"}
+        icon={reviewedToday && !nudge ? "checkmark-circle" : "albums"}
+        iconBg={nudge || reviewedToday || dueCount > 0 || newLeft > 0 ? EARTH : "#9CA3AF"}
         title={memoryTitle}
         sub={memorySub}
+        action={nudge ? "Review" : undefined}
         onPress={onMemory}
       />
     </View>
@@ -211,16 +232,24 @@ function TodayRow({
   iconBg,
   title,
   sub,
+  action,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   iconBg: string;
   title: string;
   sub: string;
+  /** A filled button in place of the chevron, when this row is today's to-do. */
+  action?: string;
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" className="flex-row items-center px-5 py-3.5 active:opacity-70">
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${sub}${action ? `. ${action}` : ""}`}
+      className="flex-row items-center px-5 py-3.5 active:opacity-70"
+    >
       <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: iconBg }}>
         <Ionicons name={icon} size={18} color="#FFFFFF" />
       </View>
@@ -232,7 +261,13 @@ function TodayRow({
           {sub}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={BLUE} />
+      {action ? (
+        <View className="rounded-full px-4 py-2 ml-2" style={{ backgroundColor: BLUE }}>
+          <Text className="text-sm font-semibold text-white">{action}</Text>
+        </View>
+      ) : (
+        <Ionicons name="chevron-forward" size={16} color={BLUE} />
+      )}
     </Pressable>
   );
 }

@@ -192,6 +192,17 @@ function PackView({ pack }: { pack: MemoryPack }) {
           </Text>
         </Pressable>
       )}
+      {pack.byVerse && inDeck(passageId(pack.passages[0])) && (
+        <Pressable
+          onPress={() => router.push({ pathname: "/memory/review", params: { mode: "practice", passage: passageId(pack.passages[0]) } })}
+          accessibilityRole="button"
+          accessibilityLabel={`Practice ${pack.title} in order: each verse you've added, then the whole passage`}
+          className="flex-row items-center justify-center rounded-2xl bg-brand-blue/10 dark:bg-brand-blue/20 py-3.5 mt-3 active:opacity-70"
+        >
+          <Ionicons name="git-merge-outline" size={17} color={BLUE} />
+          <Text className="text-base font-semibold text-brand-blue ml-2">Practice in order</Text>
+        </Pressable>
+      )}
       {added > 0 && (
         <Pressable
           onPress={() => router.push({ pathname: "/memory/review", params: { mode: "practice", collection: pack.id } })}

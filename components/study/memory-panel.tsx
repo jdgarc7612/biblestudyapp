@@ -5,15 +5,23 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { serifFont } from "../../constants/fonts";
 import { getPack, MEMORY_PACKS, STARTER_PACK_IDS, type MemoryPack } from "../../data/study/memory-packs";
+import { localDateString } from "../../lib/date";
 import {
   buildReviewQueue,
+  canStitch,
   cardStatus,
+  deckSummary,
   isDue,
   newRemainingToday,
+  passageMembers,
+  practiceDays,
   sortDeck,
+  verseSpan,
   type CardStatus,
   type MemoryCard,
 } from "../../lib/memory";
+import { memberCardsFor } from "../../lib/memory-text";
+import { remindersSupported, requestReminderPermission } from "../../lib/reminders";
 import { daysUntil } from "../../lib/srs";
 import { useAppStore } from "../../store/useAppStore";
 import { METHODS, methodLabel } from "../memory/methods";
@@ -152,6 +160,9 @@ export function MemoryPanel() {
         </Pressable>
       </View>
 
+      <ProgressCard deck={memoryDeck} streak={streak} />
+      {remindersSupported && <ReminderRow />}
+
       {/* Collections */}
       <View className="flex-row items-center justify-between mt-7 mb-2">
         <Text className="text-xs font-semibold uppercase tracking-wide text-brand-earth">Collections</Text>
@@ -221,6 +232,141 @@ export function MemoryPanel() {
           setNewListOpen(false);
           openCollection(id);
         }}
+      />
+    </View>
+  );
+}
+
+/** A quiet look at how the deck is doing and the last week of practice. */
+function ProgressCard({ deck, streak }: { deck: MemoryCard[]; streak: number }) {
+  const longest = useAppStore((s) => s.longestMemoryStreak);
+  const now = new Date();
+  const summary = deckSummary(deck, now);
+  const days = practiceDays(deck, 7, now);
+  const today = localDateString(now);
+  const practiced = days.filter((d) => d.count > 0).length;
+  return (
+    <View className="mt-7">
+      <SectionLabel>Your progress</SectionLabel>
+      <View className="rounded-3xl border border-gray-100 dark:border-gray-800 px-5 pt-4 pb-5">
+        <View className="flex-row">
+          <ProgressStat value={summary.due} label="Due" color={EARTH} />
+          <ProgressStat value={summary.learning} label="Learning" color="#7C8DB5" />
+          <ProgressStat value={summary.secure} label="Secure" color="#15803D" />
+        </View>
+        {summary.new > 0 && (
+          <Text className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+            {`and ${summary.new} new ${summary.new === 1 ? "verse" : "verses"} waiting to be learned`}
+          </Text>
+        )}
+        <View className="h-px bg-gray-100 dark:bg-gray-800 my-4" />
+        <View className="flex-row items-baseline justify-between">
+          <Text className="text-[13px] font-semibold text-gray-800 dark:text-gray-100">Last 7 days</Text>
+          <Text className="text-xs text-gray-500 dark:text-gray-400">
+            {streak > 0 ? `${streak}-day streak` : "No streak yet"}
+            {longest > streak ? ` · best ${longest}` : ""}
+          </Text>
+        </View>
+        <View
+          className="flex-row justify-between mt-3"
+          accessible
+          accessibilityLabel={`Practiced on ${practiced} of the last 7 days. ${streak > 0 ? `${streak} day streak.` : ""}`}
+        >
+          {days.map((d) => {
+            const on = d.count > 0;
+            const isToday = d.date === today;
+            const weekday = new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "narrow" });
+            return (
+              <View key={d.date} className="items-center" style={{ width: 34 }}>
+                <View
+                  className="w-7 h-7 rounded-full items-center justify-center"
+                  style={on ? { backgroundColor: BLUE } : { borderWidth: 1.5, borderColor: "#9CA3AF66", borderStyle: "dashed" }}
+                >
+                  {on && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                </View>
+                <Text
+                  className={`text-[11px] mt-1 ${isToday ? "font-bold text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}
+                >
+                  {isToday ? "Today" : weekday}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ProgressStat({ value, label, color }: { value: number; label: string; color: string }) {
+  return (
+    <View className="flex-1 items-center" accessible accessibilityLabel={`${value} ${label}`}>
+      <Text className="text-2xl font-bold text-gray-900 dark:text-white">{value}</Text>
+      <View className="flex-row items-center mt-0.5">
+        <View className="w-1.5 h-1.5 rounded-full mr-1.5" style={{ backgroundColor: color }} />
+        <Text className="text-xs text-gray-500 dark:text-gray-400">{label}</Text>
+      </View>
+    </View>
+  );
+}
+
+const REMINDER_HOURS = [7, 8, 12, 18, 21];
+const timeLabel = (hour: number, minute = 0) =>
+  new Date(2000, 0, 1, hour, minute).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+/** The phone's daily reminder (iPhone and Android build only). Permission is asked when it's turned on. */
+function ReminderRow() {
+  const reminder = useAppStore((s) => s.memoryReminder);
+  const setMemoryReminder = useAppStore((s) => s.setMemoryReminder);
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const label = reminder.enabled ? timeLabel(reminder.hour, reminder.minute) : "Off";
+
+  const choose = async (hour: number | null) => {
+    setOpen(false);
+    setNote(null);
+    if (hour === null) {
+      setMemoryReminder({ ...reminder, enabled: false });
+      return;
+    }
+    const granted = await requestReminderPermission();
+    if (granted) setMemoryReminder({ enabled: true, hour, minute: 0 });
+    else setNote("Notifications are off for Omeora. You can allow them in your phone's Settings.");
+  };
+
+  return (
+    <View className="mt-3">
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Daily reminder: ${reminder.enabled ? label : "off"}. Change`}
+        className="flex-row items-center rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3 active:opacity-70"
+      >
+        <Ionicons name={reminder.enabled ? "notifications" : "notifications-outline"} size={17} color={BLUE} />
+        <View className="flex-1 ml-3">
+          <Text className="text-[14px] font-semibold text-gray-900 dark:text-white">Daily reminder</Text>
+          <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {reminder.enabled ? `${label}, only on days with verses due` : "Off"}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={15} color="#9CA3AF" />
+      </Pressable>
+      {note && <Text className="text-xs text-gray-500 dark:text-gray-400 mt-2 px-1">{note}</Text>}
+      <Sheet
+        visible={open}
+        title="Daily reminder"
+        subtitle="A gentle note on days with verses due. Quiet once you've reviewed."
+        onClose={() => setOpen(false)}
+        options={[
+          { key: "off", label: "Off", icon: "notifications-off-outline", selected: !reminder.enabled, onPress: () => void choose(null) },
+          ...REMINDER_HOURS.map((h) => ({
+            key: String(h),
+            label: timeLabel(h),
+            icon: "time-outline" as const,
+            selected: reminder.enabled && reminder.hour === h,
+            onPress: () => void choose(h),
+          })),
+        ]}
       />
     </View>
   );
@@ -356,6 +502,8 @@ export function DeckRow({ card, onPress, onMenu }: { card: MemoryCard; onPress: 
 export function CardMenu({ card, onClose }: { card: MemoryCard | null; onClose: () => void }) {
   const router = useRouter();
   const memoryLists = useAppStore((s) => s.memoryLists);
+  const memoryDeck = useAppStore((s) => s.memoryDeck);
+  const addManyToMemoryDeck = useAppStore((s) => s.addManyToMemoryDeck);
   const setCardCollections = useAppStore((s) => s.setCardCollections);
   const removeFromMemoryDeck = useAppStore((s) => s.removeFromMemoryDeck);
   const live = useAppStore((s) => (card ? s.memoryDeck.find((c) => c.id === card.id) : undefined));
@@ -368,6 +516,8 @@ export function CardMenu({ card, onClose }: { card: MemoryCard | null; onClose: 
   if (!card) return null;
   const lists = Object.entries(memoryLists).filter(([, l]) => !l.deleted);
   const collections = live?.collections ?? card.collections;
+  const long = canStitch(card);
+  const missingVerses = long && passageMembers(card, memoryDeck).length < verseSpan(card);
 
   if (view === "lists") {
     return (
@@ -431,6 +581,34 @@ export function CardMenu({ card, onClose }: { card: MemoryCard | null; onClose: 
             router.push({ pathname: "/memory/review", params: { mode: "practice", ids: card.id } });
           },
         },
+        ...(long
+          ? [
+              {
+                key: "order",
+                label: "Practice in order",
+                sub: "Each verse, then the whole passage",
+                icon: "git-merge-outline" as const,
+                onPress: () => {
+                  close();
+                  router.push({ pathname: "/memory/review", params: { mode: "practice", passage: card.id } });
+                },
+              },
+            ]
+          : []),
+        ...(missingVerses
+          ? [
+              {
+                key: "verses",
+                label: "Add each verse too",
+                sub: "Learn it one verse at a time as well",
+                icon: "list-outline" as const,
+                onPress: () => {
+                  close();
+                  void memberCardsFor(live ?? card).then((cards) => addManyToMemoryDeck(cards)).catch(() => {});
+                },
+              },
+            ]
+          : []),
         {
           key: "read",
           label: "Open in Read",

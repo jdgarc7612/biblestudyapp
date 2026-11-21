@@ -3,11 +3,13 @@ import Head from "expo-router/head";
 import { useEffect } from "react";
 import "../global.css";
 
+import { useMemoryReminders } from "../hooks/use-memory-reminders";
 import { initAccount } from "../lib/auth/account";
 import { noteScreen } from "../lib/feedback";
 
 export default function RootLayout() {
   const pathname = usePathname();
+  useMemoryReminders();
 
   useEffect(() => {
     initAccount();
