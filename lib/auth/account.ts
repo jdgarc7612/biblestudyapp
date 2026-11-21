@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { useAppStore } from "../../store/useAppStore";
+import { friendlySignInError } from "../beta";
 import { getSupabase } from "../supabase";
 import { flushSync, setSyncUser, startSync } from "../sync";
 
@@ -62,10 +63,7 @@ export function initAccount() {
   });
 }
 
-const friendly = (message: string) =>
-  /rate limit/i.test(message)
-    ? "Too many codes were sent just now. Please wait a minute and try again."
-    : message;
+const friendly = friendlySignInError;
 
 export async function sendEmailCode(email: string): Promise<string | null> {
   const supabase = getSupabase();
@@ -78,7 +76,9 @@ export async function verifyEmailCode(email: string, code: string): Promise<stri
   const supabase = getSupabase();
   if (!supabase) return "Sign-in isn't switched on yet.";
   const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
-  return error ? "That code didn't work. Check it, or send a new one." : null;
+  if (!error) return null;
+  const message = friendly(error.message);
+  return message !== error.message ? message : "That code didn't work. Check it, or send a new one.";
 }
 
 /** Signs out and leaves this device as a fresh guest. Progress stays in the account. */

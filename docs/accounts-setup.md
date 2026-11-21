@@ -100,6 +100,31 @@ This needs the Apple Developer Program ($99/year), which you'll need for the App
    reminder in your calendar.
 4. Add `apple` to `EXPO_PUBLIC_AUTH_PROVIDERS` and redeploy.
 
+## Invite-only test (family and friends)
+
+While the gate is on, only invited emails can make an account, the app shows a welcome screen
+to everyone else, and the database refuses synced progress and AI questions for anyone not
+invited. The test ends at the end of December 20, 2026 (Central time) unless you change it.
+
+**Set it up once (about 5 minutes):**
+
+1. Supabase dashboard -> **SQL Editor** -> **New query**. Paste all of `supabase/schema.sql`,
+   click **Run**. (Safe to run again.)
+2. **New query** again. Paste `supabase/invite-gate-setup.sql`, replace
+   `PUT-YOUR-EMAIL-HERE` with the email you sign in to Omeora with, click **Run**. You are now
+   the organizer and the first invited tester.
+3. **Authentication** -> **Auth Hooks** -> **Add hook** -> **Before User Created** ->
+   type **Postgres**, schema **public**, function **beta_before_user_created** -> **Create**.
+   This is the part that stops uninvited people from making an account.
+
+**Every day:** in the app, Profile -> **Invite testers**. Type an email, tap **Add tester**.
+Remove someone the same way. The same list is in **Table Editor -> beta_invites**.
+
+**Ending or extending the test:** Profile -> Invite testers -> **The test**. Change the last
+day, or switch **Invite only** off to open Omeora to anyone with the link (guest reading
+comes back). Or in **Table Editor -> beta_settings**, edit `ends_on` or set `enabled` to false.
+The organizer can always sign in, even after the end date.
+
 ## What's built but not yet tested against a real project
 
 These are written to Supabase's and Apple's documented behaviour, but nothing here has a live
