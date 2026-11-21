@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 
 import type { PackPassage } from "../data/study/memory-packs";
-import { formatReference, getBook, loadBook, verseRangeId, type TranslationId } from "./bible";
-import type { NewMemoryCard } from "./memory";
+import { formatReference, getBook, isTranslationId, loadBook, verseRangeId, type TranslationId } from "./bible";
+import type { MemoryCard, NewMemoryCard } from "./memory";
 
 /** The passage's text, or "" when every verse in it is empty in this translation. */
 export async function passageText(translation: TranslationId, passage: PackPassage): Promise<string> {
@@ -51,4 +51,47 @@ export function usePassageTexts(translation: TranslationId, passages: PackPassag
     };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return { texts, failed };
+}
+
+/**
+ * A passage card's verses, each on its own, from the translation the card was saved in (empty
+ * verses left out). Used to put a long passage together one join at a time.
+ */
+export function useCardVerses(card: Pick<MemoryCard, "book" | "chapter" | "start" | "end" | "translation">) {
+  const translation: TranslationId = isTranslationId(card.translation) ? card.translation : "BSB";
+  const key = `${translation}|${card.book}|${card.chapter}|${card.start}|${card.end}`;
+  const [verses, setVerses] = useState<{ verse: number; text: string }[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setVerses(null);
+    setFailed(false);
+    loadBook(translation, card.book)
+      .then((book) => {
+        if (!live) return;
+        const chapter = book.c[card.chapter - 1] ?? [];
+        const out: { verse: number; text: string }[] = [];
+        for (let v = card.start; v <= card.end; v++) {
+          const text = chapter[v - 1];
+          if (text && text.trim()) out.push({ verse: v, text: text.trim() });
+        }
+        setVerses(out);
+      })
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { verses, failed };
+}
+
+/** New cards for each verse of a passage card, tagged with the passage's collections. */
+export async function memberCardsFor(card: MemoryCard): Promise<NewMemoryCard[]> {
+  const translation: TranslationId = isTranslationId(card.translation) ? card.translation : "BSB";
+  const out: NewMemoryCard[] = [];
+  for (let v = card.start; v <= card.end; v++) {
+    const next = await cardForPassage(translation, { book: card.book, chapter: card.chapter, start: v, end: v }, card.collections);
+    if (next) out.push(next);
+  }
+  return out;
 }

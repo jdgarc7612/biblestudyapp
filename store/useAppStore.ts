@@ -26,6 +26,14 @@ import storage from "../lib/storage";
 
 export type { MemoryCard, MemoryList, MemoryMethod, NewMemoryCard } from "../lib/memory";
 
+export interface MemoryReminder {
+  enabled: boolean;
+  /** Local time, 24-hour. */
+  hour: number;
+  minute: number;
+  updatedAt: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -81,6 +89,12 @@ interface AppState {
   memoryMethod: MemoryMethod;
   /** The person's own named lists of memory verses, keyed "list-...". */
   memoryLists: Record<string, MemoryList>;
+  /** Local date a Review session was last finished; Home stops reminding after that. */
+  memoryReviewDoneDate: string | null;
+  /** Local date the Home reminder was put away for the day (this device only). */
+  memoryNudgeDismissedDate: string | null;
+  /** The phone reminder (native app only; the web app reminds on Home). */
+  memoryReminder: MemoryReminder;
   chatMessages: ChatMessage[];
   displayName: string;
 
@@ -142,6 +156,10 @@ interface AppState {
   restoreMemoryCard: (card: MemoryCard) => void;
   setCardCollections: (id: string, collections: string[]) => void;
   setMemoryMethod: (method: MemoryMethod) => void;
+  /** Records that a Review session was finished today. */
+  markMemoryReviewDone: () => void;
+  dismissMemoryNudge: () => void;
+  setMemoryReminder: (reminder: Omit<MemoryReminder, "updatedAt">) => void;
   /** Creates one of the person's own lists and returns its id. */
   createMemoryList: (name: string) => string;
   renameMemoryList: (id: string, name: string) => void;
@@ -211,6 +229,9 @@ export const useAppStore = create<AppState>()(
       memoryDeck: [],
       memoryMethod: "smart",
       memoryLists: {},
+      memoryReviewDoneDate: null,
+      memoryNudgeDismissedDate: null,
+      memoryReminder: { enabled: false, hour: 8, minute: 0, updatedAt: 0 },
       chatMessages: [],
       displayName: "You",
 
@@ -308,6 +329,10 @@ export const useAppStore = create<AppState>()(
         })),
 
       setMemoryMethod: (method) => set({ memoryMethod: method }),
+
+      markMemoryReviewDone: () => set({ memoryReviewDoneDate: localDateString() }),
+      dismissMemoryNudge: () => set({ memoryNudgeDismissedDate: localDateString() }),
+      setMemoryReminder: (reminder) => set({ memoryReminder: { ...reminder, updatedAt: Date.now() } }),
 
       createMemoryList: (name) => {
         const id = `list-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;

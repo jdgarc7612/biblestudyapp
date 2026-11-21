@@ -62,6 +62,27 @@ export const MEMORY_PACKS: MemoryPack[] = [
     passages: [p("matthew", 6, 9, 13)],
     byVerse: true,
   },
+  {
+    id: "pack-hope",
+    title: "Hope",
+    summary: "Where hope comes from when the night is long, and why it holds.",
+    icon: "star",
+    passages: [p("romans", 15, 13), p("jeremiah", 29, 11), p("psalms", 42, 11), p("romans", 8, 24, 25), p("1peter", 1, 3), p("lamentations", 3, 21, 23)],
+  },
+  {
+    id: "pack-promises",
+    title: "Promises",
+    summary: "God keeps his word. Six verses to stand on when you need to remember it.",
+    icon: "ribbon",
+    passages: [p("2peter", 1, 4), p("hebrews", 10, 23), p("numbers", 23, 19), p("isaiah", 40, 31), p("joshua", 21, 45), p("2corinthians", 1, 20)],
+  },
+  {
+    id: "pack-prayer",
+    title: "Prayer",
+    summary: "Invitations to pray: boldly, constantly, and with thanks.",
+    icon: "chatbubbles",
+    passages: [p("1thessalonians", 5, 16, 18), p("matthew", 7, 7, 8), p("hebrews", 4, 16), p("psalms", 145, 18), p("james", 5, 16), p("philippians", 4, 6, 7)],
+  },
 ];
 
 /** Starter packs shown on an empty Memory home. */

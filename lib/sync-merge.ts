@@ -7,9 +7,11 @@
  *
  * Merging two copies (this device and the account):
  * - Memory cards are combined by id; for a card on both, the more recently changed one wins
- *   (its schedule, review log and collections travel together). Older SM-2 cards from either
+ *   (its schedule and review log travel together) and both copies' list and pack tags are kept,
+ *   except tags for a deleted list. Older SM-2 cards from either
  *   side are brought up to the FSRS shape first. Removed cards are remembered so a sync never
  *   brings them back. The person's own memory lists are combined by id, newest edit wins.
+ * - The date Review was last finished takes the later one; the reminder setting takes the newer edit.
  * - Each streak comes from the copy that logged a day most recently; best streaks take the higher.
  * - Study notes are combined by verse; for a note on both, the more recently edited one wins.
  * - Guided study progress is combined by plan, and answers by question; the more recently changed copy wins.
@@ -41,6 +43,8 @@ export const SYNCED_KEYS = [
   "memoryDeck",
   "deletedCardIds",
   "memoryLists",
+  "memoryReviewDoneDate",
+  "memoryReminder",
   "verseNotes",
   "planProgress",
   "planAnswers",
@@ -88,6 +92,18 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
   merged.memoryDeck = [...cards.values()].sort((x, y) => x.dateAdded.localeCompare(y.dateAdded));
   merged.deletedCardIds = deleted;
   merged.memoryLists = mergeLists(local.memoryLists, remote.memoryLists);
+  // Tags for a list deleted on either device don't come back with the other copy's tags.
+  const gone = Object.entries(merged.memoryLists).filter(([, l]) => l.deleted).map(([id]) => id);
+  if (gone.length) {
+    merged.memoryDeck = merged.memoryDeck.map((c) =>
+      c.collections.some((id) => gone.includes(id)) ? { ...c, collections: c.collections.filter((id) => !gone.includes(id)) } : c
+    );
+  }
+  const doneDates = [local.memoryReviewDoneDate, remote.memoryReviewDoneDate].filter((d): d is string => !!d).sort();
+  merged.memoryReviewDoneDate = doneDates[doneDates.length - 1] ?? null;
+  const reminders = [local.memoryReminder, remote.memoryReminder].filter((r) => r && typeof r.hour === "number");
+  merged.memoryReminder =
+    reminders.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0] ?? { enabled: false, hour: 8, minute: 0, updatedAt: 0 };
 
   const notes = { ...(remote.verseNotes ?? {}) };
   for (const [id, note] of Object.entries(local.verseNotes ?? {})) {
