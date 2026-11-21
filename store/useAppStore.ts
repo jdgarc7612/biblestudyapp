@@ -14,24 +14,17 @@ import {
   StreakKind,
   updateStreakForToday,
 } from "../lib/rewards";
-import { addDays, Difficulty, Grade, nextSrsState, toISODate } from "../lib/srs";
+import {
+  addCard,
+  migrateCard,
+  type MemoryCard,
+  type MemoryList,
+  type MemoryMethod,
+  type NewMemoryCard,
+} from "../lib/memory";
 import storage from "../lib/storage";
 
-export interface MemoryCard {
-  id: string;
-  verseReference: string;
-  verseText: string;
-  translation: string;
-  dateAdded: string;
-  interval: number;
-  easeFactor: number;
-  repetitions: number;
-  dueDate: string;
-  lastReviewed: string | null;
-}
-
-export type StudyMode = "blanks" | "type";
-export type TypeSubMode = "firstLetter" | "freeType";
+export type { MemoryCard, MemoryList, MemoryMethod, NewMemoryCard } from "../lib/memory";
 
 export interface ChatMessage {
   id: string;
@@ -40,11 +33,6 @@ export interface ChatMessage {
   verseReference?: string;
   createdAt: string;
 }
-
-export type NewMemoryCard = Pick<
-  MemoryCard,
-  "id" | "verseReference" | "verseText" | "translation"
->;
 
 export type OnboardingBonusKey = "firstRead" | "firstCard" | "firstAiQuestion";
 
@@ -89,9 +77,10 @@ export interface ReadingLocation {
 interface AppState {
   tokenBalance: number;
   memoryDeck: MemoryCard[];
-  studyMode: StudyMode;
-  typeSubMode: TypeSubMode;
-  difficulty: Difficulty;
+  /** The method Memory sessions start with ("smart" picks per card); a session can switch. */
+  memoryMethod: MemoryMethod;
+  /** The person's own named lists of memory verses, keyed "list-...". */
+  memoryLists: Record<string, MemoryList>;
   chatMessages: ChatMessage[];
   displayName: string;
 
@@ -142,12 +131,21 @@ interface AppState {
   setTokenBalance: (amount: number) => void;
   addTokens: (amount: number) => void;
   spendTokens: (amount: number) => boolean;
-  addToMemoryDeck: (card: NewMemoryCard) => void;
+  /** Adds a verse (false if it's already there or its text is empty). Collection tags merge into an existing card. */
+  addToMemoryDeck: (card: NewMemoryCard) => boolean;
+  /** Adds several (a pack); returns how many were new. */
+  addManyToMemoryDeck: (cards: NewMemoryCard[]) => number;
   removeFromMemoryDeck: (id: string) => void;
-  reviewCard: (id: string, grade: Grade) => void;
-  setStudyMode: (mode: StudyMode) => void;
-  setTypeSubMode: (mode: TypeSubMode) => void;
-  setDifficulty: (difficulty: Difficulty) => void;
+  /** Saves a graded card (the session works out the new state with lib/memory.ts). */
+  saveGradedCard: (card: MemoryCard) => void;
+  /** Puts a card back exactly as it was (undo in a session). */
+  restoreMemoryCard: (card: MemoryCard) => void;
+  setCardCollections: (id: string, collections: string[]) => void;
+  setMemoryMethod: (method: MemoryMethod) => void;
+  /** Creates one of the person's own lists and returns its id. */
+  createMemoryList: (name: string) => string;
+  renameMemoryList: (id: string, name: string) => void;
+  deleteMemoryList: (id: string) => void;
   addChatMessage: (message: ChatMessage) => void;
   clearChat: () => void;
   setDisplayName: (name: string) => void;
@@ -211,9 +209,8 @@ export const useAppStore = create<AppState>()(
       return {
       tokenBalance: 100, // mock starting balance
       memoryDeck: [],
-      studyMode: "blanks",
-      typeSubMode: "firstLetter",
-      difficulty: "medium",
+      memoryMethod: "smart",
+      memoryLists: {},
       chatMessages: [],
       displayName: "You",
 
@@ -263,22 +260,28 @@ export const useAppStore = create<AppState>()(
       },
 
       addToMemoryDeck: (card) => {
+        const result = addCard(get().memoryDeck, card);
+        if (result.deck === get().memoryDeck) return false;
         set((state) => ({
+          memoryDeck: result.deck,
           deletedCardIds: state.deletedCardIds.filter((d) => d !== card.id),
-          memoryDeck: [
-            ...state.memoryDeck,
-            {
-              ...card,
-              dateAdded: toISODate(new Date()),
-              interval: 0,
-              easeFactor: 2.5,
-              repetitions: 0,
-              dueDate: toISODate(new Date()),
-              lastReviewed: null,
-            },
-          ],
         }));
-        get().claimOnboardingBonus("firstCard");
+        if (result.added) get().claimOnboardingBonus("firstCard");
+        return result.added;
+      },
+
+      addManyToMemoryDeck: (cards) => {
+        let deck = get().memoryDeck;
+        let added = 0;
+        for (const card of cards) {
+          const result = addCard(deck, card);
+          deck = result.deck;
+          if (result.added) added++;
+        }
+        const ids = new Set(cards.map((c) => c.id));
+        set((state) => ({ memoryDeck: deck, deletedCardIds: state.deletedCardIds.filter((d) => !ids.has(d)) }));
+        if (added > 0) get().claimOnboardingBonus("firstCard");
+        return added;
       },
 
       removeFromMemoryDeck: (id) =>
@@ -287,28 +290,55 @@ export const useAppStore = create<AppState>()(
           deletedCardIds: [...state.deletedCardIds.filter((d) => d !== id), id].slice(-500),
         })),
 
-      reviewCard: (id, grade) => {
-        set((state) => ({
-          memoryDeck: state.memoryDeck.map((card) => {
-            if (card.id !== id) return card;
-            const next = nextSrsState(card, grade);
-            const now = new Date();
-            return {
-              ...card,
-              ...next,
-              lastReviewed: toISODate(now),
-              dueDate: toISODate(addDays(now, next.interval)),
-            };
-          }),
-        }));
+      saveGradedCard: (card) => {
+        set((state) => ({ memoryDeck: state.memoryDeck.map((c) => (c.id === card.id ? card : c)) }));
         get().logMemoryEngagement();
       },
 
-      setStudyMode: (mode) => set({ studyMode: mode }),
+      restoreMemoryCard: (card) =>
+        set((state) => ({
+          memoryDeck: state.memoryDeck.map((c) => (c.id === card.id ? { ...card, updatedAt: Date.now() } : c)),
+        })),
 
-      setTypeSubMode: (mode) => set({ typeSubMode: mode }),
+      setCardCollections: (id, collections) =>
+        set((state) => ({
+          memoryDeck: state.memoryDeck.map((c) =>
+            c.id === id ? { ...c, collections: Array.from(new Set(collections)), updatedAt: Date.now() } : c
+          ),
+        })),
 
-      setDifficulty: (difficulty) => set({ difficulty }),
+      setMemoryMethod: (method) => set({ memoryMethod: method }),
+
+      createMemoryList: (name) => {
+        const id = `list-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const now = Date.now();
+        set((state) => ({
+          memoryLists: { ...state.memoryLists, [id]: { name: name.trim() || "My list", createdAt: now, updatedAt: now } },
+        }));
+        return id;
+      },
+
+      renameMemoryList: (id, name) =>
+        set((state) => {
+          const list = state.memoryLists[id];
+          if (!list || !name.trim()) return state;
+          return { memoryLists: { ...state.memoryLists, [id]: { ...list, name: name.trim(), updatedAt: Date.now() } } };
+        }),
+
+      deleteMemoryList: (id) =>
+        set((state) => {
+          const list = state.memoryLists[id];
+          if (!list) return state;
+          const now = Date.now();
+          return {
+            memoryLists: { ...state.memoryLists, [id]: { ...list, deleted: true, updatedAt: now } },
+            memoryDeck: state.memoryDeck.map((c) =>
+              c.collections.includes(id)
+                ? { ...c, collections: c.collections.filter((x) => x !== id), updatedAt: now }
+                : c
+            ),
+          };
+        }),
 
       addChatMessage: (message) =>
         set((state) => ({ chatMessages: [...state.chatMessages, message] })),
@@ -501,7 +531,7 @@ export const useAppStore = create<AppState>()(
     {
       name: "biblestudyapp-storage",
       storage: createJSONStorage(() => storage),
-      version: 1,
+      version: 2,
       migrate: (persisted, version) => {
         const state = { ...(persisted as Record<string, unknown>) };
         if (version < 1) {
@@ -512,6 +542,17 @@ export const useAppStore = create<AppState>()(
           delete state.aiEarnedTokenQuestionsMonthDate;
           delete state.aiFreeDailyAllowance;
           delete state.aiEarnedTokenMonthlyCap;
+        }
+        if (version < 2) {
+          // v1 scheduled memory with SM-2 and had global method/difficulty pickers. Cards move to
+          // FSRS in place (lib/memory.ts migrateCard); nothing is reset.
+          const deck = Array.isArray(state.memoryDeck) ? state.memoryDeck : [];
+          state.memoryDeck = deck.map((c) => migrateCard(c as MemoryCard));
+          state.memoryMethod = "smart";
+          state.memoryLists = {};
+          delete state.studyMode;
+          delete state.typeSubMode;
+          delete state.difficulty;
         }
         return state as unknown as AppState;
       },

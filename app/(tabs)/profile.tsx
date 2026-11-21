@@ -7,7 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { TranslationSheet } from "../../components/read/translation-picker";
 import { deleteAccount, signOut, useAccount } from "../../lib/auth/account";
 import { TRANSLATIONS } from "../../lib/bible";
-import { isDue } from "../../lib/srs";
+import { isDue, isSecure } from "../../lib/memory";
 import { isAccountsConfigured } from "../../lib/supabase";
 import { getSyncStatus, onSyncStatus, SyncStatus } from "../../lib/sync";
 import { useAppStore } from "../../store/useAppStore";
@@ -193,8 +193,9 @@ export default function ProfileScreen() {
   const memoryDeck = useAppStore((state) => state.memoryDeck);
   const milestonesAchieved = useAppStore((state) => state.milestonesAchieved);
 
-  const cardsMastered = memoryDeck.filter((c) => c.repetitions >= 3).length;
-  const dueCount = memoryDeck.filter((c) => isDue(c.dueDate)).length;
+  // "Secure for now": reviewed well enough that the next review is 3+ weeks out (lib/srs.ts isSecureSrs).
+  const cardsSecure = memoryDeck.filter(isSecure).length;
+  const dueCount = memoryDeck.filter((c) => isDue(c)).length;
   const translationName = TRANSLATIONS.find((t) => t.id === translation)?.name ?? translation;
 
   const startEditingName = () => {
@@ -324,9 +325,9 @@ export default function ProfileScreen() {
           </View>
           <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-4">
             <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-              {cardsMastered}
+              {cardsSecure}
             </Text>
-            <Text className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Mastered</Text>
+            <Text className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Secure for now</Text>
           </View>
           <View className="flex-1 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-4">
             <Text className="text-2xl font-bold text-gray-900 dark:text-white">{dueCount}</Text>

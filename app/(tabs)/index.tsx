@@ -11,7 +11,7 @@ import { useCrossReferences, useCrossReferenceText, type CrossReference } from "
 import { localDateString } from "../../lib/date";
 import { listNotes, notesCovering, type NoteEntry } from "../../lib/notes";
 import { finishedADayOn, getPlan, nextDay, readingsLabel } from "../../lib/plans";
-import { isDue } from "../../lib/srs";
+import { isDue } from "../../lib/memory";
 import { getVerseOfTheDay } from "../../lib/verse-of-the-day";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -291,7 +291,7 @@ export default function HomeScreen() {
 
         <PickUp
           lastRead={lastRead}
-          dueCount={memoryDeck.filter((c) => isDue(c.dueDate)).length}
+          dueCount={memoryDeck.filter((c) => isDue(c)).length}
           deckSize={memoryDeck.length}
           suggestion={focusText && !planDay ? { reference: focus.reference, text: focusText } : null}
           onRead={(book, chapter) =>
