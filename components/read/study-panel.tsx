@@ -127,13 +127,27 @@ export function StudyPanel(props: Props) {
               </Text>
 
               <View className="flex-row mb-6" style={{ gap: 8 }}>
-                <ActionButton icon="sparkles" label="Insights" onPress={props.onInsights} />
-                <ActionButton icon="chatbubble-ellipses" label="Ask AI" onPress={() => props.onAsk()} />
                 <ActionButton
-                  icon={props.isInDeck ? "bookmark" : "bookmark-outline"}
-                  label={props.isInDeck ? "In deck" : "Memorize"}
+                  icon="sparkles"
+                  label="Insights"
+                  onPress={props.onInsights}
+                  accessibilityLabel={`Get AI insights on ${props.reference}`}
+                />
+                <ActionButton
+                  icon="chatbubble-ellipses"
+                  label="Ask AI"
+                  onPress={() => props.onAsk()}
+                  accessibilityLabel={`Ask AI about ${props.reference}`}
+                />
+                <ActionButton
+                  icon={props.isInDeck ? "albums" : "albums-outline"}
+                  label={props.isInDeck ? "In Memory" : "Memorize"}
                   color={EARTH}
                   onPress={props.onToggleDeck}
+                  accessibilityLabel={
+                    props.isInDeck ? `Remove ${props.reference} from Memory` : `Add ${props.reference} to Memory`
+                  }
+                  selected={props.isInDeck}
                 />
               </View>
 
@@ -227,16 +241,23 @@ function ActionButton({
   icon,
   label,
   onPress,
+  accessibilityLabel,
+  selected,
   color = BLUE,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  accessibilityLabel: string;
+  selected?: boolean;
   color?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={selected === undefined ? undefined : { selected }}
       className="flex-1 flex-row items-center justify-center rounded-2xl py-3 active:opacity-70"
       style={{ backgroundColor: `${color}1A`, borderWidth: 1, borderColor: `${color}40` }}
     >
