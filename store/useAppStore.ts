@@ -24,6 +24,12 @@ import {
 } from "../lib/memory";
 import type { MemoryChallenge } from "../lib/memory-challenge";
 import storage from "../lib/storage";
+import {
+  applyHighlight,
+  type HighlightColor,
+  type SavedVerse,
+  type VerseHighlight,
+} from "../lib/verse-marks";
 
 export type { MemoryCard, MemoryList, MemoryMethod, NewMemoryCard } from "../lib/memory";
 export type { MemoryChallenge } from "../lib/memory-challenge";
@@ -110,6 +116,10 @@ interface AppState {
   verseNotes: Record<string, VerseNote>;
   lastStudy: StudyLocation | null;
 
+  // Read tab marks (lib/verse-marks.ts), keyed by verse range id. Saved verses are not Memory.
+  verseHighlights: Record<string, VerseHighlight>;
+  savedVerses: Record<string, SavedVerse>;
+
   // Guided studies (data/study/plans.ts): the plan Home follows, and progress per plan.
   activePlanId: string | null;
   planProgress: Record<string, PlanProgress>;
@@ -180,6 +190,11 @@ interface AppState {
   /** Saves (or, with empty text, deletes) the note on a verse range. */
   saveVerseNote: (id: string, reference: string, text: string) => void;
   setLastStudy: (location: StudyLocation) => void;
+  /** Highlights (or, with null, clears) verses start-end of one chapter. */
+  setVerseHighlight: (book: string, chapter: number, start: number, end: number, color: HighlightColor | null) => void;
+  /** Adds a verse or range to Saved. Never touches the Memory deck. */
+  saveVerse: (id: string, entry: Pick<SavedVerse, "reference" | "translation" | "text">) => void;
+  unsaveVerse: (id: string) => void;
   /** Makes a plan the active one, starting it fresh if it's new or already finished. */
   startPlan: (id: string, totalDays: number) => void;
   /** Starts a plan over from day 1. */
@@ -268,6 +283,9 @@ export const useAppStore = create<AppState>()(
 
       verseNotes: {},
       lastStudy: null,
+
+      verseHighlights: {},
+      savedVerses: {},
 
       activePlanId: null,
       planProgress: {},
@@ -464,6 +482,24 @@ export const useAppStore = create<AppState>()(
               [id]: { text: trimmed, reference, updatedAt: Date.now() },
             },
           };
+        }),
+
+      setVerseHighlight: (book, chapter, start, end, color) =>
+        set((state) => ({
+          verseHighlights: applyHighlight(state.verseHighlights, { book, chapter, start, end }, color, Date.now()),
+        })),
+
+      saveVerse: (id, entry) =>
+        set((state) => {
+          const now = Date.now();
+          return { savedVerses: { ...state.savedVerses, [id]: { ...entry, savedAt: now, updatedAt: now } } };
+        }),
+
+      unsaveVerse: (id) =>
+        set((state) => {
+          const existing = state.savedVerses[id];
+          if (!existing || existing.removed) return state;
+          return { savedVerses: { ...state.savedVerses, [id]: { ...existing, removed: true, updatedAt: Date.now() } } };
         }),
 
       logReadEngagement: () => {

@@ -1,5 +1,7 @@
-/** Sharing a bit of text (an invite) through the phone's share sheet, or the browser's. */
+/** Sharing a bit of text (an invite, a verse) through the phone's share sheet, or the browser's. */
 import { Platform, Share } from "react-native";
+
+import { writeClipboard } from "./clipboard";
 
 /**
  * Where the web app lives, for links that open on any device. On the web the page's own address
@@ -40,13 +42,7 @@ export async function shareText(message: string): Promise<ShareResult> {
   }
 }
 
-/** Copies on the web. Phones use the share sheet, which has its own Copy. */
+/** Copies to the clipboard: the browser's on the web, the phone's through expo-clipboard. */
 export async function copyText(text: string): Promise<ShareResult> {
-  try {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return "failed";
-    await navigator.clipboard.writeText(text);
-    return "copied";
-  } catch {
-    return "failed";
-  }
+  return (await writeClipboard(text)) ? "copied" : "failed";
 }

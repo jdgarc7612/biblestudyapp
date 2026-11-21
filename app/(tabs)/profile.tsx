@@ -307,7 +307,7 @@ export default function ProfileScreen() {
             <Ionicons name="create-outline" size={16} color="#4A6FA5" />
           </View>
           <View className="flex-1">
-            <Text className="text-base font-semibold text-gray-900 dark:text-white">My notes</Text>
+            <Text className="text-base font-semibold text-gray-900 dark:text-white">My notes & saved verses</Text>
             <Text className="text-xs text-gray-400 dark:text-gray-500">
               {noteCount === 1 ? "1 note" : `${noteCount} notes`} on passages you&apos;ve studied
             </Text>
