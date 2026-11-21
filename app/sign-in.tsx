@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppleButton } from "../components/account/apple-button";
+import { useGateView } from "../hooks/use-gate-view";
 import { rememberGivenName, sendEmailCode, useAccount, verifyEmailCode } from "../lib/auth/account";
 import { isNativeAppleSignInAvailable, signInWithApple } from "../lib/auth/apple";
 import { signInWithProvider, SignInResult } from "../lib/auth/oauth";
@@ -24,6 +25,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function SignInScreen() {
   const router = useRouter();
   const user = useAccount((s) => s.user);
+  // During the private test, sign-in is the way in: email codes only, at the invited address.
+  const inviteOnly = useGateView() !== "open";
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -40,10 +43,12 @@ export default function SignInScreen() {
 
   // Once signed in (by any route), close this screen.
   useEffect(() => {
-    if (user) router.back();
+    if (!user) return;
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
   }, [user, router]);
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace("/profile"));
+  const close = () => (router.canGoBack() ? router.back() : router.replace(inviteOnly ? "/welcome" : "/profile"));
 
   const runProvider = async (which: "apple" | "google") => {
     setError(null);
@@ -108,11 +113,12 @@ export default function SignInScreen() {
             <Ionicons name="cloud-done-outline" size={26} color="#4A6FA5" />
           </View>
           <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Keep your progress safe
+            {inviteOnly ? "Sign in to Omeora" : "Keep your progress safe"}
           </Text>
           <Text className="text-base text-gray-500 dark:text-gray-400 mb-8 leading-6">
-            Sign in to save your verses, streaks and settings to your account, so they follow you to
-            any device. Everything you&apos;ve done so far comes with you.
+            {inviteOnly
+              ? "Use the email you were invited at. We'll send you a short code, and your progress is saved to your account."
+              : "Sign in to save your verses, streaks and settings to your account, so they follow you to any device. Everything you've done so far comes with you."}
           </Text>
 
           {!isAccountsConfigured ? (
@@ -124,7 +130,7 @@ export default function SignInScreen() {
             </View>
           ) : (
             <>
-              {(showApple || googleSignInEnabled) && step === "email" && (
+              {!inviteOnly && (showApple || googleSignInEnabled) && step === "email" && (
                 <View style={{ gap: 10 }} className="mb-6">
                   {showApple && <AppleButton onPress={() => runProvider("apple")} disabled={!!busy} />}
                   {googleSignInEnabled && (
@@ -172,8 +178,9 @@ export default function SignInScreen() {
                   />
                   <PrimaryButton label="Email me a code" onPress={sendCode} busy={busy === "email"} />
                   <Text className="text-xs text-gray-400 dark:text-gray-500 mt-3 leading-5">
-                    No password needed. We&apos;ll email you a short code, and a new account is made
-                    the first time.
+                    {inviteOnly
+                      ? "No password needed. This test is invite-only, so use the email you were invited at."
+                      : "No password needed. We'll email you a short code, and a new account is made the first time."}
                   </Text>
                 </>
               ) : (

@@ -62,3 +62,35 @@ export function makeAccountQuota(
     record: () => call("record_ai_question"),
   };
 }
+
+/**
+ * True while Omeora's invite-only test gate is on (supabase/schema.sql, beta_status). Then only
+ * signed-in, invited readers may ask, and their access is checked by record_ai_question.
+ * Remembered for a minute so guests can't make every request call Supabase.
+ */
+let gateCache: { on: boolean; until: number } | null = null;
+
+export async function inviteGateOn(supabaseUrl: string, supabaseKey: string): Promise<boolean> {
+  const now = Date.now();
+  if (gateCache && gateCache.until > now) return gateCache.on;
+  let on = false;
+  try {
+    const res = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/rest/v1/rpc/beta_status`, {
+      method: "POST",
+      headers: { apikey: supabaseKey, "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (res.status === 404) {
+      on = false; // The gate's SQL hasn't been run: guests can ask as before.
+    } else if (res.ok) {
+      const value = (await res.json()) as { enabled?: unknown } | null;
+      on = value?.enabled === true;
+    } else {
+      on = true; // Unsure: stay closed rather than open.
+    }
+  } catch {
+    on = true;
+  }
+  gateCache = { on, until: now + 60_000 };
+  return on;
+}

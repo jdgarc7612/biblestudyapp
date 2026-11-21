@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { TranslationSheet } from "../../components/read/translation-picker";
 import { deleteAccount, signOut, useAccount } from "../../lib/auth/account";
+import { useBetaGate } from "../../lib/auth/beta-gate";
 import { TRANSLATIONS } from "../../lib/bible";
 import { isDue, isSecure } from "../../lib/memory";
 import { isAccountsConfigured } from "../../lib/supabase";
@@ -144,8 +145,8 @@ function ConfirmDeleteSheet({
           <View className="self-center w-10 h-1 rounded-full bg-gray-200 dark:bg-gray-700 mb-5" />
           <Text className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete your account?</Text>
           <Text className="text-sm text-gray-500 dark:text-gray-400 leading-5 mb-6">
-            This permanently deletes your account and everything saved to it: your memory verses,
-            streaks, badges and tokens. It also clears them from this device. This can&apos;t be undone.
+            This permanently deletes your account and everything saved to it: your notes, study
+            answers, memory verses, streaks, badges and tokens. It also clears them from this device. This can&apos;t be undone.
           </Text>
           {error && <Text className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</Text>}
           <Pressable
@@ -172,6 +173,7 @@ function ConfirmDeleteSheet({
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAccount((s) => s.user);
+  const isTestOrganizer = useBetaGate((s) => !!user && s.status?.isAdmin === true);
   const syncStatus = useSyncStatus();
   const translation = useAppStore((state) => state.translation);
   const setDisplayName = useAppStore((state) => state.setDisplayName);
@@ -370,6 +372,19 @@ export default function ProfileScreen() {
               onPress={() => setTranslationOpen(true)}
             />
           </View>
+
+          {isTestOrganizer && (
+            <>
+              <SectionLabel>Private test</SectionLabel>
+              <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 mb-8">
+                <SettingsRow
+                  icon="people-outline"
+                  label="Invite testers"
+                  onPress={() => router.push("/invite-testers")}
+                />
+              </View>
+            </>
+          )}
 
           <SectionLabel>Help and feedback</SectionLabel>
           <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 mb-8">

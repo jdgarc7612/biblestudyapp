@@ -11,7 +11,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 
-import { AccountQuota, accountDay, makeAccountQuota } from "./quota";
+import { AccountQuota, accountDay, inviteGateOn, makeAccountQuota } from "./quota";
 import { SYSTEM_PROMPT } from "./prompt";
 
 export interface Env {
@@ -171,6 +171,13 @@ export default {
     let used = 0;
     const limit = Math.max(1, Number(env.AI_DAILY_LIMIT) || 5);
     const token = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!token && env.SUPABASE_URL && env.SUPABASE_KEY && (await inviteGateOn(env.SUPABASE_URL, env.SUPABASE_KEY))) {
+      return json(
+        { error: "This test is invite-only. Please sign in to ask a question.", code: "signed_out" },
+        401,
+        cors
+      );
+    }
     if (token && env.SUPABASE_URL && env.SUPABASE_KEY) {
       quota = makeAccountQuota(env.SUPABASE_URL, env.SUPABASE_KEY, token, accountDay(request.headers.get("X-Timezone")));
       const check = await quota.used();
