@@ -60,11 +60,12 @@ test("deep dive: every Strong's number is in its verse", () => {
   }
 });
 
-test("deep dive: loader finds Acts 2 and nothing where there is no study", async () => {
+test("deep dive: loader finds a chapter and nothing where there is no study", async () => {
   assert.ok(hasDeepDive("acts", 2));
-  assert.ok(!hasDeepDive("acts", 3));
+  assert.ok(!hasDeepDive("acts", 29));
   const acts2 = await loadDeepDive("acts", 2);
   assert.equal(acts2?.chapter, 2);
-  assert.equal(await loadDeepDive("acts", 3), null);
+  assert.equal((await loadDeepDive("john", 3))?.chapter, 3);
+  assert.equal(await loadDeepDive("acts", 29), null);
   assert.equal(await loadDeepDive("genesis", 1), null);
 });
