@@ -43,6 +43,8 @@ export default function RootLayout() {
           <Stack.Screen name="feedback" options={{ presentation: "modal" }} />
           <Stack.Screen name="invite-testers" />
           <Stack.Screen name="notes" />
+          <Stack.Screen name="answers/index" />
+          <Stack.Screen name="answers/[id]" />
           <Stack.Screen name="shop" />
           <Stack.Screen name="memory/index" />
           <Stack.Screen name="memory/challenge" />

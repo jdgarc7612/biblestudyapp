@@ -4,7 +4,9 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AnswerCard } from "../components/ai/answer-card";
 import { serifFont } from "../constants/fonts";
+import { listAnswers, searchAnswers } from "../lib/ai-answers";
 import { BOOKS } from "../lib/bible";
 import { byPassage, listNotes, type NoteEntry } from "../lib/notes";
 import { listPlanAnswers, readingsLabel } from "../lib/plans";
@@ -13,7 +15,7 @@ import { useAppStore } from "../store/useAppStore";
 
 const BLUE = "#4A6FA5";
 type Order = "recent" | "bible";
-type Tab = "notes" | "saved";
+type Tab = "notes" | "saved" | "answers";
 
 function formatDate(ms: number) {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -31,7 +33,8 @@ const BOOK_INDEX = new Map(BOOKS.map((b, i) => [b.id, i]));
 export default function NotesScreen() {
   const router = useRouter();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
-  const [tab, setTab] = useState<Tab>(tabParam === "saved" ? "saved" : "notes");
+  const [tab, setTab] = useState<Tab>(tabParam === "saved" || tabParam === "answers" ? tabParam : "notes");
+  const aiAnswers = useAppStore((s) => s.aiAnswers);
   const savedVerses = useAppStore((s) => s.savedVerses);
   const unsaveVerse = useAppStore((s) => s.unsaveVerse);
   const verseNotes = useAppStore((s) => s.verseNotes);
@@ -64,6 +67,10 @@ export default function NotesScreen() {
     const filtered = q ? saved.filter((v) => [v.text, v.reference].some((t) => t.toLowerCase().includes(q))) : saved;
     return order === "bible" ? [...filtered].sort(byPassage) : filtered;
   }, [saved, query, order]);
+
+  const savedAnswers = useMemo(() => listAnswers(aiAnswers, true), [aiAnswers]);
+  const shownAnswers = useMemo(() => searchAnswers(savedAnswers, query), [savedAnswers, query]);
+  const counts: Record<Tab, number> = { notes: all.length, saved: saved.length, answers: savedAnswers.length };
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -114,15 +121,16 @@ export default function NotesScreen() {
           <Ionicons name="chevron-back" size={24} color={BLUE} />
         </Pressable>
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1">
-          {tab === "saved" ? "Saved verses" : "My notes"}
+          {tab === "saved" ? "Saved verses" : tab === "answers" ? "Saved answers" : "My notes"}
         </Text>
-        <Text className="text-sm text-gray-400 dark:text-gray-500">{tab === "saved" ? saved.length : all.length}</Text>
+        <Text className="text-sm text-gray-400 dark:text-gray-500">{counts[tab]}</Text>
       </View>
       <View className="flex-row px-5 pt-3" style={{ gap: 8 }}>
         {(
           [
             ["notes", "Notes", "create-outline"],
             ["saved", "Saved", "bookmark-outline"],
+            ["answers", "Answers", "sparkles-outline"],
           ] as [Tab, string, keyof typeof Ionicons.glyphMap][]
         ).map(([id, label, icon]) => (
           <Pressable
@@ -130,7 +138,7 @@ export default function NotesScreen() {
             onPress={() => setTab(id)}
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === id }}
-            accessibilityLabel={`${label}, ${id === "saved" ? saved.length : all.length}`}
+            accessibilityLabel={`${label}, ${counts[id]}`}
             className={`flex-1 flex-row items-center justify-center rounded-xl py-2 ${tab === id ? "bg-brand-blue/10 dark:bg-blue-300/15" : ""}`}
           >
             <Ionicons name={icon} size={15} color={tab === id ? BLUE : "#9CA3AF"} />
@@ -147,7 +155,17 @@ export default function NotesScreen() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
       >
-        {tab === "saved" ? (
+        {tab === "answers" ? (
+          <SavedAnswers
+            entries={shownAnswers}
+            total={savedAnswers.length}
+            query={query}
+            setQuery={setQuery}
+            signedIn={signedIn}
+            onOpen={(id) => router.push({ pathname: "/answers/[id]", params: { id } })}
+            onHistory={() => router.push("/answers")}
+          />
+        ) : tab === "saved" ? (
           <SavedList
             entries={shownSaved}
             total={saved.length}
@@ -395,6 +413,73 @@ function SavedList({
       </View>
       <Text className="text-xs text-gray-400 dark:text-gray-500 text-center mt-6">
         {signedIn ? "Saved verses sync to your account." : "Saved verses stay on this device. Sign in to keep them everywhere."}
+      </Text>
+    </>
+  );
+}
+
+/** Ask AI answers the reader saved. Every answer is also in History (Ask AI tab). */
+function SavedAnswers({
+  entries,
+  total,
+  query,
+  setQuery,
+  signedIn,
+  onOpen,
+  onHistory,
+}: {
+  entries: ReturnType<typeof listAnswers>;
+  total: number;
+  query: string;
+  setQuery: (q: string) => void;
+  signedIn: boolean;
+  onOpen: (id: string) => void;
+  onHistory: () => void;
+}) {
+  const historyLink = (
+    <Pressable onPress={onHistory} hitSlop={8} accessibilityRole="link" className="self-center mt-5 active:opacity-60">
+      <Text className="text-sm font-semibold text-brand-blue dark:text-blue-300">See every past answer</Text>
+    </Pressable>
+  );
+  if (total === 0) {
+    return (
+      <View className="items-center pt-16 px-6">
+        <View className="w-14 h-14 rounded-full bg-brand-blue/10 items-center justify-center mb-4">
+          <Ionicons name="sparkles-outline" size={26} color={BLUE} />
+        </View>
+        <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No saved answers yet</Text>
+        <Text className="text-sm text-center text-gray-500 dark:text-gray-400 leading-5">
+          On Ask AI, tap Save under an answer to keep it here. Every answer is also kept in History.
+        </Text>
+        {historyLink}
+      </View>
+    );
+  }
+  return (
+    <>
+      <View className="flex-row items-center rounded-2xl bg-gray-100 dark:bg-gray-800 px-4 mb-4">
+        <Ionicons name="search" size={16} color="#9CA3AF" />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search saved answers"
+          placeholderTextColor="#9CA3AF"
+          className="flex-1 py-3 ml-2 text-base text-gray-900 dark:text-gray-100"
+        />
+      </View>
+      {entries.length === 0 && (
+        <Text className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+          No saved answers match “{query.trim()}”.
+        </Text>
+      )}
+      <View style={{ gap: 10 }}>
+        {entries.map((a) => (
+          <AnswerCard key={a.id} entry={a} onPress={() => onOpen(a.id)} />
+        ))}
+      </View>
+      {historyLink}
+      <Text className="text-xs text-gray-400 dark:text-gray-500 text-center mt-4">
+        {signedIn ? "Saved answers sync to your account." : "Saved answers stay on this device. Sign in to keep them everywhere."}
       </Text>
     </>
   );
