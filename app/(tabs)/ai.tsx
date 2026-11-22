@@ -47,6 +47,8 @@ export default function AskAIScreen() {
     translation?: string;
     /** A question to ask straight away (from Home's study prompts or the study panel). */
     question?: string;
+    /** A question to put in the box for the reader to finish and send (Go Deeper's "Personalize with AI"). */
+    draft?: string;
   }>();
   const router = useRouter();
 
@@ -145,6 +147,16 @@ export default function AskAIScreen() {
     if (!failed || questionsLeft === 0) return;
     void ask(failed.question, failed.context);
   };
+
+  const handledDraft = useRef<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!params.draft || handledDraft.current === params.draft) return;
+    handledDraft.current = params.draft;
+    setInput(params.draft);
+    const timer = setTimeout(() => inputRef.current?.focus(), 300);
+    return () => clearTimeout(timer);
+  }, [params.draft]);
 
   useEffect(() => {
     if (!params.question && (!params.verseRef || !params.verseText)) return;
@@ -345,6 +357,7 @@ export default function AskAIScreen() {
 
         <View className="flex-row items-end px-5 pb-4 pt-2" style={{ gap: 8 }}>
           <TextInput
+            ref={inputRef}
             value={input}
             onChangeText={setInput}
             placeholder={questionsLeft > 0 ? "Ask a question…" : "Come back tomorrow for more questions"}
