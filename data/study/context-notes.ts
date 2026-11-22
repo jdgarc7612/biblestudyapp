@@ -9,6 +9,8 @@
  * Word notes use Strong's numbers that were checked against the bundled interlinear.
  */
 
+import { CONTEXT_NOTES_GOSPELS_ACTS } from "./context-notes-gospels-acts";
+
 export interface WordToNotice {
   /** Verse the word appears in. */
   v: number;
@@ -1054,6 +1056,8 @@ export const CONTEXT_NOTES: ContextNote[] = [
       { v: 3, s: 530, note: "Hapax, \"once for all\". The faith was delivered complete; nothing needs to be added." },
     ],
   },
+  // ── New Testament, every chapter (Nov 22) ─────────────────────
+  ...CONTEXT_NOTES_GOSPELS_ACTS,
 ];
 
 /** The note shown above a chapter, if any (the first note that starts in that chapter). */
