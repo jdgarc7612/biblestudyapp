@@ -29,6 +29,15 @@ const deepDiveLoaders: Record<string, Loader> = {
   "2timothy": () => import("./2timothy.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
   titus: () => import("./titus.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
   philemon: () => import("./philemon.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  hebrews: () => import("./hebrews.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  james: () => import("./james.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  "1peter": () => import("./1peter.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  "2peter": () => import("./2peter.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  "1john": () => import("./1john.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  "2john": () => import("./2john.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  "3john": () => import("./3john.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  jude: () => import("./jude.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  revelation: () => import("./revelation.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
 };
 
 /**
@@ -57,6 +66,15 @@ export const DEEP_DIVE_CHAPTERS: Record<string, readonly number[]> = {
   "2timothy": chapters(4),
   titus: chapters(3),
   philemon: chapters(1),
+  hebrews: chapters(13),
+  james: chapters(5),
+  "1peter": chapters(5),
+  "2peter": chapters(3),
+  "1john": chapters(5),
+  "2john": chapters(1),
+  "3john": chapters(1),
+  jude: chapters(1),
+  revelation: chapters(22),
 };
 
 export function hasDeepDive(bookId: string, chapter: number): boolean {
