@@ -11,6 +11,7 @@
 
 import { CONTEXT_NOTES_GOSPELS_ACTS } from "./context-notes-gospels-acts";
 import { CONTEXT_NOTES_PAUL } from "./context-notes-paul";
+import { CONTEXT_NOTES_LETTERS_REVELATION } from "./context-notes-letters-revelation";
 
 export interface WordToNotice {
   /** Verse the word appears in. */
@@ -1060,6 +1061,7 @@ export const CONTEXT_NOTES: ContextNote[] = [
   // ── New Testament, every chapter (Nov 22) ─────────────────────
   ...CONTEXT_NOTES_GOSPELS_ACTS,
   ...CONTEXT_NOTES_PAUL,
+  ...CONTEXT_NOTES_LETTERS_REVELATION,
 ];
 
 /** The note shown above a chapter, if any (the first note that starts in that chapter). */
