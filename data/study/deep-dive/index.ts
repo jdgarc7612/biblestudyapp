@@ -11,6 +11,10 @@ type Loader = () => Promise<{ default: DeepDiveChapter[] }>;
  * (the same lazy pattern as data/original/<book>.json).
  */
 const deepDiveLoaders: Record<string, Loader> = {
+  matthew: () => import("./matthew.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  mark: () => import("./mark.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  luke: () => import("./luke.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  john: () => import("./john.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
   acts: () => import("./acts.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
 };
 
@@ -18,8 +22,15 @@ const deepDiveLoaders: Record<string, Loader> = {
  * Chapters that have a Go Deeper study, so the Setting card can show its button without
  * loading the book's file. tests/deep-dive.test.ts checks this matches the JSON files.
  */
+/** Chapters 1..n, for books where every chapter has a study. */
+const chapters = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+
 export const DEEP_DIVE_CHAPTERS: Record<string, readonly number[]> = {
-  acts: [2],
+  matthew: chapters(28),
+  mark: chapters(16),
+  luke: chapters(24),
+  john: chapters(21),
+  acts: chapters(28),
 };
 
 export function hasDeepDive(bookId: string, chapter: number): boolean {
