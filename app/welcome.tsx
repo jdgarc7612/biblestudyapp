@@ -36,30 +36,33 @@ export default function WelcomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28, paddingTop: 56, paddingBottom: 32 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 32 }}
       >
         <View className="w-full self-center flex-1" style={{ maxWidth: 440 }}>
           <Brand />
 
-          <View className="mt-12 flex-1">
+          <View className={view === "welcome" ? "mt-8 flex-1" : "mt-12 flex-1"}>
             {view === "welcome" && (
               <>
-                <Text
-                  className="text-2xl text-gray-900 dark:text-white mb-3 leading-9"
-                  style={{ fontFamily: serifFont }}
-                >
-                  You&apos;re invited to an early look.
-                </Text>
-                <Text className="text-base text-gray-500 dark:text-gray-400 leading-6 mb-8">
-                  Omeora is in a small, private test with family and friends. Sign in with the email
-                  you were invited at, and we&apos;ll send you a short code. No password needed.
-                </Text>
-                <PrimaryButton label="Sign in with your invite email" onPress={() => router.push("/sign-in")} />
-                {lastDay ? (
-                  <Text className="text-sm text-gray-400 dark:text-gray-500 mt-5 text-center">
-                    The test runs through {lastDay}.
+                <AppSummary />
+                <View className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-5 pt-5 pb-5">
+                  <Text
+                    className="text-xl text-gray-900 dark:text-white mb-2"
+                    style={{ fontFamily: serifFont }}
+                  >
+                    You&apos;re invited to an early look.
                   </Text>
-                ) : null}
+                  <Text className="text-sm text-gray-500 dark:text-gray-400 leading-5 mb-3">
+                    Omeora is in a small, private test with family and friends. Sign in with the
+                    email you were invited at, and we&apos;ll send you a short code. No password
+                    needed.
+                  </Text>
+                  {lastDay ? (
+                    <Text className="text-sm text-gray-400 dark:text-gray-500">
+                      The test runs through {lastDay}.
+                    </Text>
+                  ) : null}
+                </View>
               </>
             )}
 
@@ -108,7 +111,76 @@ export default function WelcomeScreen() {
           </View>
         </View>
       </ScrollView>
+      {view === "welcome" && (
+        // The way in stays in reach while visitors read what Omeora offers.
+        <View className="px-6 pt-3 pb-4 border-t border-gray-100 dark:border-gray-800">
+          <View className="w-full self-center" style={{ maxWidth: 440 }}>
+            <PrimaryButton label="Sign in with your invite email" onPress={() => router.push("/sign-in")} />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
+  );
+}
+
+/** What Omeora is and what you get, for people who haven't signed in yet. */
+const FEATURES: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string }[] = [
+  {
+    icon: "book-outline",
+    title: "Read",
+    body: "The whole Bible in BSB, WEB and KJV. Highlight, take notes and save verses.",
+  },
+  {
+    icon: "layers-outline",
+    title: "Study every chapter",
+    body: "Background, theology and application for each New Testament chapter, plus the Hebrew and Greek behind every word.",
+  },
+  {
+    icon: "chatbubble-ellipses-outline",
+    title: "Ask AI",
+    body: "Ask any Bible question and get a clear, patient answer grounded in Scripture.",
+  },
+  {
+    icon: "compass-outline",
+    title: "Guided studies",
+    body: "Day-by-day reading plans with questions to help you reflect.",
+  },
+  {
+    icon: "albums-outline",
+    title: "Memorize",
+    body: "Hide God's Word in your heart with flashcards, listening and spaced review.",
+  },
+];
+
+function AppSummary() {
+  return (
+    <View className="mb-7">
+      <Text
+        className="text-2xl text-gray-900 dark:text-white text-center leading-9 mb-6"
+        style={{ fontFamily: serifFont }}
+      >
+        Read, study and understand the Bible, all in one place.
+      </Text>
+      <View style={{ gap: 16 }}>
+        {FEATURES.map((f) => (
+          <View key={f.title} className="flex-row" style={{ gap: 14 }}>
+            <View
+              className="w-9 h-9 rounded-full items-center justify-center"
+              style={{ backgroundColor: `${BLUE}1A` }}
+            >
+              <Ionicons name={f.icon} size={18} color={BLUE} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-gray-900 dark:text-white">{f.title}</Text>
+              <Text className="text-sm text-gray-500 dark:text-gray-400 leading-5 mt-0.5">{f.body}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+      <Text className="text-sm text-gray-400 dark:text-gray-500 text-center mt-6">
+        Your notes and progress follow you to any device you sign in on.
+      </Text>
+    </View>
   );
 }
 
