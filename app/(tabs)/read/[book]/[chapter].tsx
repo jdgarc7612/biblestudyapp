@@ -20,6 +20,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StudyPanel, type OpenTarget, type StudyTab } from "../../../../components/read/study-panel";
 import { VerseActionSheet, type SheetStatus } from "../../../../components/read/verse-action-sheet";
 import { SettingCard } from "../../../../components/read/setting-card";
+import { DeepDiveSheet } from "../../../../components/read/deep-dive-sheet";
+import { hasDeepDive } from "../../../../data/study/deep-dive";
 import { TranslationPill } from "../../../../components/read/translation-picker";
 import { contextNoteForChapter } from "../../../../data/study/context-notes";
 import { serifFont } from "../../../../constants/fonts";
@@ -128,6 +130,8 @@ function ChapterReader({
   const setLastRead = useAppStore((state) => state.setLastRead);
   const chapterData = useChapter(translation, bookId, chapterNum);
   const contextNote = contextNoteForChapter(bookId, chapterNum);
+  const deepDiveAvailable = !!contextNote && hasDeepDive(bookId, chapterNum);
+  const [deepDiveOpen, setDeepDiveOpen] = useState(false);
 
   useEffect(() => {
     setLastRead({ book: bookId, chapter: chapterNum });
@@ -487,7 +491,14 @@ function ChapterReader({
             {chapterData.title}
           </Text>
         ) : null}
-        {contextNote ? <SettingCard note={contextNote} bookId={bookId} onWord={studyWord} /> : null}
+        {contextNote ? (
+          <SettingCard
+            note={contextNote}
+            bookId={bookId}
+            onWord={studyWord}
+            onGoDeeper={deepDiveAvailable ? () => setDeepDiveOpen(true) : undefined}
+          />
+        ) : null}
         <View className="h-4" onLayout={(ev) => (textTopRef.current = ev.nativeEvent.layout.y)} />
         {chapterData.loading ? (
           <View className="py-16 items-center">
@@ -721,6 +732,34 @@ function ChapterReader({
             <Ionicons name="chevron-forward" size={16} color="#4A6FA5" />
           </Pressable>
         </View>
+      )}
+
+      {deepDiveAvailable && contextNote && (
+        <DeepDiveSheet
+          visible={deepDiveOpen}
+          onClose={() => setDeepDiveOpen(false)}
+          bookId={bookId}
+          chapter={chapterNum}
+          reference={chapterTitle(book.name, chapterNum)}
+          title={contextNote.title}
+          onWord={(v, s) => {
+            setDeepDiveOpen(false);
+            studyWord(v, s);
+          }}
+          onVerse={(v) => {
+            setDeepDiveOpen(false);
+            setSelection({ anchor: v, focus: v });
+          }}
+          onPersonalize={() => {
+            setDeepDiveOpen(false);
+            router.push({
+              pathname: "/ai",
+              params: {
+                draft: `Help me apply ${chapterTitle(book.name, chapterNum)} (${contextNote.title}) to my own life. Here's what's going on for me: `,
+              },
+            });
+          }}
+        />
       )}
 
       {selection && cardId && rangeStart !== null && rangeEnd !== null && (

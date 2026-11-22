@@ -20,10 +20,13 @@ export function SettingCard({
   note,
   bookId,
   onWord,
+  onGoDeeper,
 }: {
   note: ContextNote;
   bookId: string;
   onWord: (verse: number, strongs: number) => void;
+  /** Opens the chapter's Go Deeper study; the button shows only when this is given. */
+  onGoDeeper?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const toggle = () => {
@@ -72,6 +75,23 @@ export function SettingCard({
               </View>
             </>
           )}
+          {onGoDeeper ? (
+            <Pressable
+              onPress={onGoDeeper}
+              className="flex-row items-center justify-between mt-4 pt-3 active:opacity-70"
+              style={{ borderTopWidth: 1, borderTopColor: `${EARTH}33` }}
+              accessibilityRole="button"
+              accessibilityLabel="Go deeper: context, theology and application"
+            >
+              <Text className="text-xs text-gray-500 dark:text-gray-400">Context, theology and application</Text>
+              <View className="flex-row items-center">
+                <Text className="text-sm font-semibold" style={{ color: BLUE }}>
+                  Go Deeper
+                </Text>
+                <Ionicons name="arrow-forward" size={14} color={BLUE} style={{ marginLeft: 4 }} />
+              </View>
+            </Pressable>
+          ) : null}
         </View>
       )}
     </View>
