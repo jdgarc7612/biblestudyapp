@@ -23,6 +23,13 @@ import {
   type NewMemoryCard,
 } from "../lib/memory";
 import type { MemoryChallenge } from "../lib/memory-challenge";
+import {
+  addAnswer,
+  answersFromChat,
+  deleteAnswer,
+  setAnswerSaved,
+  type AiAnswer,
+} from "../lib/ai-answers";
 import storage from "../lib/storage";
 import {
   applyHighlight,
@@ -33,6 +40,7 @@ import {
 
 export type { MemoryCard, MemoryList, MemoryMethod, NewMemoryCard } from "../lib/memory";
 export type { MemoryChallenge } from "../lib/memory-challenge";
+export type { AiAnswer } from "../lib/ai-answers";
 
 export interface MemoryReminder {
   enabled: boolean;
@@ -48,6 +56,8 @@ export interface ChatMessage {
   content: string;
   verseReference?: string;
   createdAt: string;
+  /** For an answer: its entry in `aiAnswers` (history), so the bubble can save or delete it. */
+  answerId?: string;
 }
 
 export type OnboardingBonusKey = "firstRead" | "firstCard" | "firstAiQuestion";
@@ -105,7 +115,10 @@ interface AppState {
   memoryNudgeDismissedDate: string | null;
   /** The phone reminder (native app only; the web app reminds on Home). */
   memoryReminder: MemoryReminder;
+  /** The conversation on the Ask AI tab (this device only; "New chat" clears it). */
   chatMessages: ChatMessage[];
+  /** Every answer kept, saved or not (lib/ai-answers.ts), keyed by id. Synced. */
+  aiAnswers: Record<string, AiAnswer>;
   displayName: string;
 
   // Reading
@@ -184,6 +197,10 @@ interface AppState {
   leaveMemoryChallenge: (id: string) => void;
   addChatMessage: (message: ChatMessage) => void;
   clearChat: () => void;
+  /** Keeps an answer in history and returns its id. Never calls the AI. */
+  recordAiAnswer: (id: string, entry: Pick<AiAnswer, "question" | "answer" | "reference" | "rangeId" | "translation">) => void;
+  setAiAnswerSaved: (id: string, saved: boolean) => void;
+  deleteAiAnswer: (id: string) => void;
   setDisplayName: (name: string) => void;
   setTranslation: (translation: TranslationId) => void;
   setLastRead: (location: ReadingLocation) => void;
@@ -257,6 +274,7 @@ export const useAppStore = create<AppState>()(
       memoryNudgeDismissedDate: null,
       memoryReminder: { enabled: false, hour: 8, minute: 0, updatedAt: 0 },
       chatMessages: [],
+      aiAnswers: {},
       displayName: "You",
 
       translation: DEFAULT_TRANSLATION,
@@ -412,6 +430,19 @@ export const useAppStore = create<AppState>()(
         set((state) => ({ chatMessages: [...state.chatMessages, message] })),
 
       clearChat: () => set({ chatMessages: [] }),
+
+      recordAiAnswer: (id, entry) =>
+        set((state) => ({ aiAnswers: addAnswer(state.aiAnswers, id, entry, Date.now()) })),
+
+      setAiAnswerSaved: (id, saved) =>
+        set((state) => ({ aiAnswers: setAnswerSaved(state.aiAnswers, id, saved, Date.now()) })),
+
+      deleteAiAnswer: (id) =>
+        set((state) => ({
+          aiAnswers: deleteAnswer(state.aiAnswers, id, Date.now()),
+          // The bubble stays in the conversation; it just isn't linked to history any more.
+          chatMessages: state.chatMessages.map((m) => (m.answerId === id ? { ...m, answerId: undefined } : m)),
+        })),
 
       setDisplayName: (name) => set({ displayName: name }),
 
@@ -617,7 +648,7 @@ export const useAppStore = create<AppState>()(
     {
       name: "biblestudyapp-storage",
       storage: createJSONStorage(() => storage),
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const state = { ...(persisted as Record<string, unknown>) };
         if (version < 1) {
@@ -639,6 +670,13 @@ export const useAppStore = create<AppState>()(
           delete state.studyMode;
           delete state.typeSubMode;
           delete state.difficulty;
+        }
+        if (version < 3) {
+          // v2 kept the Ask AI conversation on this device only. Its answers start the history.
+          const chat = Array.isArray(state.chatMessages) ? (state.chatMessages as ChatMessage[]) : [];
+          const kept = answersFromChat(chat);
+          state.aiAnswers = kept;
+          state.chatMessages = chat.map((m) => (m.role === "assistant" && kept[m.id] ? { ...m, answerId: m.id } : m));
         }
         return state as unknown as AppState;
       },

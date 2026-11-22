@@ -201,6 +201,8 @@ export interface FoundReference {
   book: BookMeta;
   chapter: number;
   verse?: number;
+  /** The last verse of a range ("John 3:16-18" gives 18). */
+  endVerse?: number;
 }
 
 export function findReferences(text: string): FoundReference[] {
@@ -217,6 +219,7 @@ export function findReferences(text: string): FoundReference[] {
       book,
       chapter,
       verse: m[3] ? Number(m[3]) : undefined,
+      endVerse: m[3] && m[4] ? Number(m[4]) : undefined,
     });
   }
   return found;

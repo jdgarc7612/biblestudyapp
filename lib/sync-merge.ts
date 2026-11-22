@@ -17,11 +17,14 @@
  * - Highlights and saved verses are combined by verse range the same way; removals are kept as
  *   tombstones so they win over an older copy.
  * - Guided study progress is combined by plan, and answers by question; the more recently changed copy wins.
+ * - Ask AI answers are combined by id, newest change wins, deletions kept as tombstones; then
+ *   history is capped (all saved answers, the newest unsaved ones; see lib/ai-answers.ts).
  * - Badges and claimed bonuses are combined.
  * - Settings, name and tokens come from whichever copy changed last. The first time a device
  *   joins an account that already has data, the account's copy wins, so a guest's starter
  *   tokens never replace a real balance.
  */
+import { mergeAnswers } from "./ai-answers";
 import { migrateCard, mergeLists, pickNewerCard, type MemoryCard } from "./memory";
 import { mergeChallenges } from "./memory-challenge";
 import { mergeByUpdatedAt } from "./verse-marks";
@@ -55,6 +58,7 @@ export const SYNCED_KEYS = [
   "savedVerses",
   "planProgress",
   "planAnswers",
+  "aiAnswers",
   "currentReadStreak",
   "longestReadStreak",
   "lastReadDate",
@@ -139,6 +143,7 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
     if (!answers[id] || answer.updatedAt > answers[id].updatedAt) answers[id] = answer;
   }
   merged.planAnswers = answers;
+  merged.aiAnswers = mergeAnswers(local.aiAnswers, remote.aiAnswers);
 
   const read = streakWinner(local, remote, "lastReadDate", "currentReadStreak");
   merged.currentReadStreak = read.currentReadStreak;

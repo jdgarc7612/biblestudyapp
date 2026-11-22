@@ -12,10 +12,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { NOTE_RESULT_TEXT, useAddAnswerToNote } from "../../components/ai/answer-actions";
 import { FormattedText } from "../../components/ai/formatted-text";
 import { serifFont } from "../../constants/fonts";
 import { AI_DAILY_QUESTION_LIMIT, isLiveAiConfigured } from "../../lib/ai-config";
 import { askStudyCompanion } from "../../lib/ai-client";
+import { answerPassage, listAnswers } from "../../lib/ai-answers";
 import { isTranslationId, type FoundReference } from "../../lib/bible";
 import { localDateString } from "../../lib/date";
 import { generateInsightRequestPrompt, VerseContext } from "../../lib/mock-ai";
@@ -60,6 +62,12 @@ export default function AskAIScreen() {
   const aiFreeQuestionsAskedToday = useAppStore((state) => state.aiFreeQuestionsAskedToday);
   const aiFreeQuestionsAskedTodayDate = useAppStore((state) => state.aiFreeQuestionsAskedTodayDate);
   const savedTranslation = useAppStore((state) => state.translation);
+  const aiAnswers = useAppStore((state) => state.aiAnswers);
+  const recordAiAnswer = useAppStore((state) => state.recordAiAnswer);
+  const setAiAnswerSaved = useAppStore((state) => state.setAiAnswerSaved);
+  const addToNote = useAddAnswerToNote();
+  const [answerStatus, setAnswerStatus] = useState<{ id: string; text: string } | null>(null);
+  const historyCount = listAnswers(aiAnswers).length;
 
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -106,11 +114,22 @@ export default function AskAIScreen() {
       history,
     });
     if (result.ok) {
+      // Kept in history straight away, so it's there to come back to (and synced when signed in).
+      const id = makeId();
+      const passage = answerPassage(question, context?.reference);
+      recordAiAnswer(id, {
+        question,
+        answer: result.answer,
+        reference: passage?.reference,
+        rangeId: passage?.rangeId,
+        translation,
+      });
       addChatMessage({
-        id: makeId(),
+        id,
         role: "assistant",
         content: result.answer,
         createdAt: new Date().toISOString(),
+        answerId: id,
       });
       // Signed in: the account's count is the one that matters, wherever else it was used today.
       if (result.remaining !== undefined) {
@@ -187,21 +206,36 @@ export default function AskAIScreen() {
       >
         <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
           <Text className="text-lg font-bold text-gray-900 dark:text-white">Ask AI</Text>
-          {chatMessages.length > 0 && (
-            <Pressable
-              onPress={() => {
-                useAppStore.getState().clearChat();
-                setActiveContext(null);
-                setFailed(null);
-              }}
-              hitSlop={8}
-              className="active:opacity-60"
-            >
-              <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500">
-                Clear
-              </Text>
-            </Pressable>
-          )}
+          <View className="flex-row items-center" style={{ gap: 16 }}>
+            {chatMessages.length > 0 && (
+              <Pressable
+                onPress={() => {
+                  useAppStore.getState().clearChat();
+                  setActiveContext(null);
+                  setFailed(null);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Start a new chat. Your answers stay in History."
+                className="flex-row items-center active:opacity-60"
+              >
+                <Ionicons name="add-circle-outline" size={16} color="#9CA3AF" />
+                <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 ml-1">New chat</Text>
+              </Pressable>
+            )}
+            {historyCount > 0 && (
+              <Pressable
+                onPress={() => router.push("/answers")}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`History, ${historyCount} answers`}
+                className="flex-row items-center active:opacity-60"
+              >
+                <Ionicons name="time-outline" size={16} color="#4A6FA5" />
+                <Text className="text-xs font-semibold text-brand-blue dark:text-blue-300 ml-1">History</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {isEmpty ? (
@@ -273,7 +307,8 @@ export default function AskAIScreen() {
           >
             {chatMessages.map((item) => {
               const isUser = item.role === "user";
-              return (
+              const kept = item.answerId ? aiAnswers[item.answerId] : undefined;
+              const bubble = (
                 <View
                   key={item.id}
                   className="max-w-[85%] rounded-2xl px-4 py-3"
@@ -294,6 +329,53 @@ export default function AskAIScreen() {
                       onReferencePress={openReference}
                     />
                   )}
+                </View>
+              );
+              if (isUser || !kept || kept.deleted || !item.answerId) return bubble;
+              const answerId = item.answerId;
+              const status = answerStatus?.id === answerId ? answerStatus.text : null;
+              return (
+                <View key={item.id} style={{ alignSelf: "stretch" }}>
+                  {bubble}
+                  <View className="flex-row items-center mt-1.5 ml-1" style={{ gap: 18 }}>
+                    <Pressable
+                      onPress={() => {
+                        setAiAnswerSaved(answerId, !kept.saved);
+                        setAnswerStatus({ id: answerId, text: kept.saved ? "Removed from Saved" : "Saved to My notes" });
+                      }}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={kept.saved ? "Remove this answer from Saved" : "Save this answer"}
+                      className="flex-row items-center active:opacity-60"
+                    >
+                      <Ionicons name={kept.saved ? "bookmark" : "bookmark-outline"} size={14} color="#4A6FA5" />
+                      <Text className="text-xs font-semibold text-brand-blue dark:text-blue-300 ml-1">
+                        {kept.saved ? "Saved" : "Save"}
+                      </Text>
+                    </Pressable>
+                    {kept.rangeId ? (
+                      <Pressable
+                        onPress={() =>
+                          setAnswerStatus({
+                            id: answerId,
+                            text: NOTE_RESULT_TEXT[addToNote(kept)](kept.reference ?? "this verse"),
+                          })
+                        }
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add this answer to your note on ${kept.reference ?? "this verse"}`}
+                        className="flex-row items-center active:opacity-60"
+                      >
+                        <Ionicons name="create-outline" size={14} color="#9CA3AF" />
+                        <Text className="text-xs font-semibold text-gray-500 dark:text-gray-400 ml-1">Add to note</Text>
+                      </Pressable>
+                    ) : null}
+                    {status ? (
+                      <Text accessibilityLiveRegion="polite" className="text-xs text-gray-400 dark:text-gray-500 flex-shrink">
+                        {status}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
               );
             })}

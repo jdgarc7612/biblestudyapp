@@ -34,6 +34,7 @@ import {
   useChapter,
   verseRangeId,
 } from "../../../../lib/bible";
+import { chapterAnswerMarks } from "../../../../lib/ai-answers";
 import { localDateString } from "../../../../lib/date";
 import { selectionNoteStatus } from "../../../../lib/notes";
 import { copyText, shareText } from "../../../../lib/share";
@@ -243,6 +244,14 @@ function ChapterReader({
     () => chapterHighlights(verseHighlights, bookId, chapterNum),
     [verseHighlights, bookId, chapterNum]
   );
+  // Ask AI answers about verses here (lib/ai-answers.ts): a small mark after the last verse asked about.
+  const aiAnswers = useAppStore((state) => state.aiAnswers);
+  const answerMarks = useMemo(() => chapterAnswerMarks(aiAnswers, bookId, chapterNum), [aiAnswers, bookId, chapterNum]);
+  const openAnswers = (verse: number, ids: string[]) =>
+    ids.length === 1
+      ? router.push({ pathname: "/answers/[id]", params: { id: ids[0] } })
+      : router.push({ pathname: "/answers", params: { book: bookId, chapter: String(chapterNum), verse: String(verse) } });
+
   const bookmarkEnds = useMemo(
     () =>
       new Set(
@@ -529,6 +538,7 @@ function ChapterReader({
             const inMemory = savedRanges.some((r) => r && v.verse >= r.start && v.verse <= r.end);
             const highlight = highlightSwatch(highlightColors.get(v.verse));
             const bookmarked = bookmarkEnds.has(v.verse);
+            const answerIds = answerMarks.get(v.verse);
             const inSelection =
               rangeStart !== null && rangeEnd !== null && v.verse >= rangeStart && v.verse <= rangeEnd;
             return (
@@ -560,6 +570,22 @@ function ChapterReader({
                 {bookmarked ? (
                   <Text accessibilityLabel="Saved" className="text-xs">
                     {" "}<Ionicons name="bookmark" size={11} color={BLUE} />
+                  </Text>
+                ) : null}
+                {answerIds ? (
+                  <Text
+                    onPress={(ev) => {
+                      // Don't also select the verse underneath (web passes the click up).
+                      ev?.stopPropagation?.();
+                      openAnswers(v.verse, answerIds);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      answerIds.length === 1 ? "Open your Ask AI answer on this verse" : `Open your ${answerIds.length} Ask AI answers on this verse`
+                    }
+                    className="text-xs"
+                  >
+                    {" "}<Ionicons name="sparkles" size={11} color={EARTH} />
                   </Text>
                 ) : null}{" "}
               </Text>
