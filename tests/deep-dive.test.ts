@@ -67,5 +67,6 @@ test("deep dive: loader finds a chapter and nothing where there is no study", as
   assert.equal(acts2?.chapter, 2);
   assert.equal((await loadDeepDive("john", 3))?.chapter, 3);
   assert.equal(await loadDeepDive("acts", 29), null);
-  assert.equal(await loadDeepDive("genesis", 1), null);
+  assert.equal((await loadDeepDive("genesis", 1))?.chapter, 1);
+  assert.equal(await loadDeepDive("notabook", 1), null);
 });
