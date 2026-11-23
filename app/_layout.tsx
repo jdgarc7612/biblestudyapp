@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import "../global.css";
 
 import { useGateView } from "../hooks/use-gate-view";
+import { trackScreen } from "../lib/activity";
 import { useMemoryReminders } from "../hooks/use-memory-reminders";
 import { initAccount } from "../lib/auth/account";
 import { initBetaGate } from "../lib/auth/beta-gate";
@@ -23,6 +24,7 @@ export default function RootLayout() {
   // Remembered so feedback can say which screen someone was on.
   useEffect(() => {
     noteScreen(pathname);
+    trackScreen(pathname);
   }, [pathname]);
 
   return (
@@ -42,6 +44,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="feedback" options={{ presentation: "modal" }} />
           <Stack.Screen name="invite-testers" />
+          <Stack.Screen name="testers" />
           <Stack.Screen name="notes" />
           <Stack.Screen name="answers/index" />
           <Stack.Screen name="answers/[id]" />

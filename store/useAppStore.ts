@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { track } from "../lib/activity";
 import { AI_DAILY_QUESTION_LIMIT } from "../lib/ai-config";
 import { DEFAULT_TRANSLATION, TranslationId } from "../lib/bible-types";
 import { localDateString } from "../lib/date";
@@ -332,7 +333,10 @@ export const useAppStore = create<AppState>()(
           memoryDeck: result.deck,
           deletedCardIds: state.deletedCardIds.filter((d) => d !== card.id),
         }));
-        if (result.added) get().claimOnboardingBonus("firstCard");
+        if (result.added) {
+          get().claimOnboardingBonus("firstCard");
+          track("memorize_add", card.id);
+        }
         return result.added;
       },
 
@@ -346,7 +350,10 @@ export const useAppStore = create<AppState>()(
         }
         const ids = new Set(cards.map((c) => c.id));
         set((state) => ({ memoryDeck: deck, deletedCardIds: state.deletedCardIds.filter((d) => !ids.has(d)) }));
-        if (added > 0) get().claimOnboardingBonus("firstCard");
+        if (added > 0) {
+          get().claimOnboardingBonus("firstCard");
+          track("memorize_add", `${added} verses`);
+        }
         return added;
       },
 
@@ -359,6 +366,7 @@ export const useAppStore = create<AppState>()(
       saveGradedCard: (card) => {
         set((state) => ({ memoryDeck: state.memoryDeck.map((c) => (c.id === card.id ? card : c)) }));
         get().logMemoryEngagement();
+        track("memory_card", card.id);
       },
 
       restoreMemoryCard: (card) =>
@@ -375,12 +383,17 @@ export const useAppStore = create<AppState>()(
 
       setMemoryMethod: (method) => set({ memoryMethod: method }),
 
-      markMemoryReviewDone: () => set({ memoryReviewDoneDate: localDateString() }),
+      markMemoryReviewDone: () => {
+        if (get().memoryReviewDoneDate !== localDateString()) track("memory_review_done");
+        set({ memoryReviewDoneDate: localDateString() });
+      },
       dismissMemoryNudge: () => set({ memoryNudgeDismissedDate: localDateString() }),
       setMemoryReminder: (reminder) => set({ memoryReminder: { ...reminder, updatedAt: Date.now() } }),
 
-      saveMemoryChallenge: (challenge) =>
-        set((state) => ({ memoryChallenges: { ...state.memoryChallenges, [challenge.id]: challenge } })),
+      saveMemoryChallenge: (challenge) => {
+        if (!get().memoryChallenges[challenge.id]) track("memory_challenge");
+        set((state) => ({ memoryChallenges: { ...state.memoryChallenges, [challenge.id]: challenge } }));
+      },
 
       leaveMemoryChallenge: (id) =>
         set((state) => {
@@ -431,11 +444,16 @@ export const useAppStore = create<AppState>()(
 
       clearChat: () => set({ chatMessages: [] }),
 
-      recordAiAnswer: (id, entry) =>
-        set((state) => ({ aiAnswers: addAnswer(state.aiAnswers, id, entry, Date.now()) })),
+      recordAiAnswer: (id, entry) => {
+        // The verse reference only; never the question or the answer.
+        track("ask_ai", entry.reference ?? null);
+        set((state) => ({ aiAnswers: addAnswer(state.aiAnswers, id, entry, Date.now()) }));
+      },
 
-      setAiAnswerSaved: (id, saved) =>
-        set((state) => ({ aiAnswers: setAnswerSaved(state.aiAnswers, id, saved, Date.now()) })),
+      setAiAnswerSaved: (id, saved) => {
+        if (saved) track("answer_save");
+        set((state) => ({ aiAnswers: setAnswerSaved(state.aiAnswers, id, saved, Date.now()) }));
+      },
 
       deleteAiAnswer: (id) =>
         set((state) => ({
@@ -446,13 +464,17 @@ export const useAppStore = create<AppState>()(
 
       setDisplayName: (name) => set({ displayName: name }),
 
-      setTranslation: (translation) => set({ translation }),
+      setTranslation: (translation) => {
+        if (translation !== get().translation) track("translation", translation);
+        set({ translation });
+      },
 
       setLastRead: (location) => set({ lastRead: location }),
 
       setLastStudy: (location) => set({ lastStudy: location }),
 
-      startPlan: (id, totalDays) =>
+      startPlan: (id, totalDays) => {
+        if (get().activePlanId !== id) track("plan_start", id);
         set((state) => {
           const existing = state.planProgress[id];
           const finished = !!existing && Object.keys(existing.done).length >= totalDays;
@@ -464,7 +486,8 @@ export const useAppStore = create<AppState>()(
               [id]: { startedOn: localDateString(), done: {}, updatedAt: Date.now() },
             },
           };
-        }),
+        });
+      },
 
       restartPlan: (id) =>
         set((state) => ({
@@ -475,7 +498,8 @@ export const useAppStore = create<AppState>()(
           },
         })),
 
-      setPlanDayDone: (id, day, done, totalDays) =>
+      setPlanDayDone: (id, day, done, totalDays) => {
+        if (done && !get().planProgress[id]?.done[day]) track("plan_day_done", `${id} day ${day}`);
         set((state) => {
           const existing = state.planProgress[id] ?? { startedOn: localDateString(), done: {}, updatedAt: 0 };
           const nextDone = { ...existing.done };
@@ -486,7 +510,8 @@ export const useAppStore = create<AppState>()(
             activePlanId: finished && state.activePlanId === id ? null : state.activePlanId,
             planProgress: { ...state.planProgress, [id]: { ...existing, done: nextDone, updatedAt: Date.now() } },
           };
-        }),
+        });
+      },
 
       leavePlan: () => set({ activePlanId: null }),
 
@@ -494,6 +519,8 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           const trimmed = text.trim();
           if ((state.planAnswers[id]?.text ?? "") === trimmed) return state;
+          // Which question only; never what was written.
+          if (trimmed && !state.planAnswers[id]?.text) track("plan_answer", id);
           return {
             planAnswers: {
               ...state.planAnswers,
@@ -507,6 +534,8 @@ export const useAppStore = create<AppState>()(
           const trimmed = text.trim();
           const existing = state.verseNotes[id];
           if ((existing?.text ?? "") === trimmed) return state;
+          // Which verse only; never the note itself.
+          if (trimmed && !existing?.text) track("note_save", id);
           return {
             verseNotes: {
               ...state.verseNotes,
@@ -515,16 +544,20 @@ export const useAppStore = create<AppState>()(
           };
         }),
 
-      setVerseHighlight: (book, chapter, start, end, color) =>
+      setVerseHighlight: (book, chapter, start, end, color) => {
+        if (color) track("highlight", `${book} ${chapter}:${start}${end > start ? `-${end}` : ""} ${color}`);
         set((state) => ({
           verseHighlights: applyHighlight(state.verseHighlights, { book, chapter, start, end }, color, Date.now()),
-        })),
+        }));
+      },
 
-      saveVerse: (id, entry) =>
+      saveVerse: (id, entry) => {
+        track("verse_save", id);
         set((state) => {
           const now = Date.now();
           return { savedVerses: { ...state.savedVerses, [id]: { ...entry, savedAt: now, updatedAt: now } } };
-        }),
+        });
+      },
 
       unsaveVerse: (id) =>
         set((state) => {

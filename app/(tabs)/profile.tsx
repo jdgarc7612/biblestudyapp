@@ -382,6 +382,13 @@ export default function ProfileScreen() {
                   label="Invite testers"
                   onPress={() => router.push("/invite-testers")}
                 />
+                <Divider />
+                <SettingsRow
+                  icon="pulse-outline"
+                  label="Testers"
+                  value="Who's using it"
+                  onPress={() => router.push("/testers")}
+                />
               </View>
             </>
           )}

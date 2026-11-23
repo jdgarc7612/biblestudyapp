@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { serifFont } from "../../constants/fonts";
+import { track } from "../../lib/activity";
 import { formatReference, getBook, type TranslationId } from "../../lib/bible";
 import { useCrossReferenceText, type CrossReference } from "../../lib/cross-references";
 import {
@@ -98,7 +99,14 @@ export function WordStudy(props: Props) {
                 return (
                   <Text key={i}>
                     <Text
-                      onPress={tappable ? () => setSelected({ strongs: w.strongs, word: w }) : undefined}
+                      onPress={
+                        tappable
+                          ? () => {
+                              track("word_study", `${props.bookId} ${props.chapter} ${lang}${w.strongs}`);
+                              setSelected({ strongs: w.strongs, word: w });
+                            }
+                          : undefined
+                      }
                       accessibilityRole={tappable ? "button" : undefined}
                       style={
                         active

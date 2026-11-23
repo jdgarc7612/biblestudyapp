@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAccount } from "../lib/auth/account";
+import { track } from "../lib/activity";
 import { FEEDBACK_KINDS, FEEDBACK_MAX_CHARS, sendFeedback, type FeedbackKind } from "../lib/feedback";
 
 const BLUE = "#4A6FA5";
@@ -37,7 +38,10 @@ export default function FeedbackScreen() {
     const problem = await sendFeedback({ kind, message, replyEmail: user ? undefined : replyEmail });
     setBusy(false);
     if (problem) setError(problem);
-    else setSent(true);
+    else {
+      track("feedback_sent", kind);
+      setSent(true);
+    }
   };
 
   const inputClass =

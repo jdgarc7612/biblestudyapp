@@ -3,6 +3,7 @@ import { LayoutAnimation, Platform, Pressable, Text, UIManager, View } from "rea
 import { Ionicons } from "@expo/vector-icons";
 
 import { serifFont } from "../../constants/fonts";
+import { track } from "../../lib/activity";
 import type { ContextNote } from "../../data/study/context-notes";
 import { languageOf, strongsLabel, useLexiconEntry } from "../../lib/original-language";
 
@@ -31,6 +32,7 @@ export function SettingCard({
   const [open, setOpen] = useState(false);
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!open) track("setting_card", `${bookId} ${note.chapter}`);
     setOpen((o) => !o);
   };
   const range = note.start ? `vv. ${note.start}–${note.end ?? note.start} · ` : "";

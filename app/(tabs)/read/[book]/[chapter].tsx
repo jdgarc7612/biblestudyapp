@@ -37,6 +37,7 @@ import {
 import { chapterAnswerMarks } from "../../../../lib/ai-answers";
 import { localDateString } from "../../../../lib/date";
 import { selectionNoteStatus } from "../../../../lib/notes";
+import { track } from "../../../../lib/activity";
 import { copyText, shareText } from "../../../../lib/share";
 import {
   chapterHighlights,
@@ -192,6 +193,7 @@ function ChapterReader({
   const [studyTab, setStudyTab] = useState<StudyTab>(routeTab);
   const [initialWord, setInitialWord] = useState<number | undefined>(routeWord);
   const openStudyPanel = (tab: StudyTab = "words", word?: number) => {
+    track("study_panel", `${bookId} ${chapterNum} ${tab}`);
     setStudyTab(tab);
     setInitialWord(word);
     setSheetOpen(true);
@@ -385,6 +387,7 @@ function ChapterReader({
 
   const shareMessage = () => formatVerseShare(verseReference, translation, selectedVerses);
   const copySelection = async () => {
+    track("verse_share", `${verseReference} copy`);
     const result = await copyText(shareMessage());
     showStatus(
       result === "copied"
@@ -393,6 +396,7 @@ function ChapterReader({
     );
   };
   const shareSelection = async () => {
+    track("verse_share", `${verseReference} share`);
     const result = await shareText(shareMessage());
     if (result === "shared") showStatus({ tone: "ok", text: "Shared" });
     else if (result === "copied") showStatus({ tone: "ok", text: "No share sheet here, so it's copied instead" });
@@ -505,7 +509,14 @@ function ChapterReader({
             note={contextNote}
             bookId={bookId}
             onWord={studyWord}
-            onGoDeeper={deepDiveAvailable ? () => setDeepDiveOpen(true) : undefined}
+            onGoDeeper={
+              deepDiveAvailable
+                ? () => {
+                    track("go_deeper", `${bookId} ${chapterNum}`);
+                    setDeepDiveOpen(true);
+                  }
+                : undefined
+            }
           />
         ) : null}
         <View className="h-4" onLayout={(ev) => (textTopRef.current = ev.nativeEvent.layout.y)} />

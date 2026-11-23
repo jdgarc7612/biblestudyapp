@@ -8,6 +8,7 @@ import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, Text, Vie
 import { Ionicons } from "@expo/vector-icons";
 
 import { serifFont } from "../../constants/fonts";
+import { track } from "../../lib/activity";
 import { TRANSLATIONS, useChapter, type TranslationId } from "../../lib/bible";
 import { HIGHLIGHT_COLORS, highlightSwatch, type HighlightColor } from "../../lib/verse-marks";
 
@@ -152,7 +153,10 @@ export function VerseActionSheet({
               <SheetAction
                 icon="git-compare-outline"
                 label="Compare"
-                onPress={() => setMode("compare")}
+                onPress={() => {
+                  track("verse_compare", reference);
+                  setMode("compare");
+                }}
                 accessibilityLabel={`Compare ${reference} in BSB, WEB and KJV`}
               />
               <SheetAction
