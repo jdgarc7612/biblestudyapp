@@ -103,6 +103,10 @@ class Collector:
             self.buf.append(text)
 
     def add_title(self, text):
+        # The WEB and KJV mark Psalm 119's Hebrew letters ("ALEPH", "TAV") like a title; the last one
+        # used to show as the psalm's title. Psalm 119 has none, and the letters come from the headings.
+        if re.fullmatch(r"[A-Z]+( [A-Z]+)*\.?", clean(text)):
+            return
         if self.book and self.chapter and text.strip():
             self.titles.setdefault(self.book, {})[self.chapter] = clean(text)
 
