@@ -11,6 +11,9 @@ type Loader = () => Promise<{ default: DeepDiveChapter[] }>;
  * (the same lazy pattern as data/original/<book>.json).
  */
 const deepDiveLoaders: Record<string, Loader> = {
+  genesis: () => import("./genesis.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  psalms: () => import("./psalms.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
+  proverbs: () => import("./proverbs.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
   matthew: () => import("./matthew.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
   mark: () => import("./mark.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
   luke: () => import("./luke.json") as unknown as Promise<{ default: DeepDiveChapter[] }>,
@@ -48,6 +51,9 @@ const deepDiveLoaders: Record<string, Loader> = {
 const chapters = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
 export const DEEP_DIVE_CHAPTERS: Record<string, readonly number[]> = {
+  genesis: chapters(50),
+  psalms: chapters(150),
+  proverbs: chapters(31),
   matthew: chapters(28),
   mark: chapters(16),
   luke: chapters(24),
