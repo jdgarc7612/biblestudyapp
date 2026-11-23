@@ -407,3 +407,129 @@ drop policy if exists "Send feedback" on public.feedback;
 create policy "Send feedback" on public.feedback
   for insert to anon, authenticated
   with check (user_id is not distinct from (select auth.uid()));
+
+-- ---------------------------------------------------------------------------------------------
+-- Tester activity (Profile -> Testers, organizer only). The app records which screens and
+-- features signed-in people use: an event name, the screen, and a short detail the app builds
+-- itself (a book and chapter, a plan id, a study tab). Never note text, Ask AI questions or
+-- answers, or study answers. People can only add their own rows; only the organizer can read
+-- them, through the two functions below. Rows are deleted with the account.
+-- ---------------------------------------------------------------------------------------------
+create table if not exists public.activity_events (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  event text not null check (event ~ '^[a-z][a-z0-9_]{0,39}$'),
+  screen text check (char_length(screen) <= 120),
+  detail text check (char_length(detail) <= 80),
+  platform text check (char_length(platform) <= 40),
+  app_version text check (char_length(app_version) <= 40)
+);
+
+create index if not exists activity_events_user_time on public.activity_events (user_id, created_at desc);
+create index if not exists activity_events_time on public.activity_events (created_at desc);
+
+alter table public.activity_events enable row level security;
+revoke all on public.activity_events from anon, authenticated;
+-- The app may only add rows, and only these columns; user_id and the time come from the server.
+grant insert (event, screen, detail, platform, app_version) on public.activity_events to authenticated;
+
+drop policy if exists "Record own activity" on public.activity_events;
+create policy "Record own activity" on public.activity_events
+  for insert to authenticated
+  with check (user_id = (select auth.uid()) and (select public.beta_allows_me()));
+
+-- One row per account: when they joined, when they were last around, how many days they've
+-- used Omeora, Ask AI use, and what they use most. Days and "last active" also count sign-ins,
+-- synced saves and AI questions from before activity was recorded.
+create or replace function public.tester_overview()
+returns table (
+  user_id uuid,
+  email text,
+  signed_up_at timestamptz,
+  last_sign_in_at timestamptz,
+  last_active_at timestamptz,
+  days_active integer,
+  ai_questions_week integer,
+  ai_questions_logged integer,
+  events integer,
+  first_event_at timestamptz,
+  top_features jsonb,
+  top_screens jsonb,
+  invited boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  z text;
+begin
+  perform public.beta_require_admin();
+  select coalesce(s.time_zone, 'America/Chicago') into z from public.beta_settings s where s.id = 1;
+  z := coalesce(z, 'America/Chicago');
+  return query
+  with days as (
+    select e.user_id as uid, (e.created_at at time zone z)::date as d from public.activity_events e
+    union select a.user_id, a.day from public.ai_usage a where a.questions > 0
+    union select d.user_id, (d.updated_at at time zone z)::date from public.user_data d
+    union select u.id, (u.created_at at time zone z)::date from auth.users u
+    union select u.id, (u.last_sign_in_at at time zone z)::date from auth.users u where u.last_sign_in_at is not null
+  ),
+  feats as (
+    select e.user_id as uid, e.event, count(*) as n from public.activity_events e
+    where e.event not in ('screen', 'app_open') group by 1, 2
+  ),
+  scrs as (
+    select e.user_id as uid, e.screen, count(*) as n from public.activity_events e
+    where e.event in ('screen', 'chapter_open') and e.screen is not null group by 1, 2
+  )
+  select
+    u.id,
+    u.email::text,
+    u.created_at,
+    u.last_sign_in_at,
+    greatest(u.last_sign_in_at,
+      (select max(e.created_at) from public.activity_events e where e.user_id = u.id),
+      (select d.updated_at from public.user_data d where d.user_id = u.id)),
+    (select count(distinct x.d)::integer from days x where x.uid = u.id),
+    (select coalesce(sum(a.questions), 0)::integer from public.ai_usage a
+      where a.user_id = u.id and a.day > (now() at time zone z)::date - 7),
+    (select count(*)::integer from public.activity_events e where e.user_id = u.id and e.event = 'ask_ai'),
+    (select count(*)::integer from public.activity_events e where e.user_id = u.id),
+    (select min(e.created_at) from public.activity_events e where e.user_id = u.id),
+    coalesce((select jsonb_agg(jsonb_build_object('event', f.event, 'n', f.n) order by f.n desc)
+      from (select * from feats f2 where f2.uid = u.id order by f2.n desc limit 5) f), '[]'::jsonb),
+    coalesce((select jsonb_agg(jsonb_build_object('screen', s.screen, 'n', s.n) order by s.n desc)
+      from (select * from scrs s2 where s2.uid = u.id order by s2.n desc limit 5) s), '[]'::jsonb),
+    exists (select 1 from public.beta_invites i where i.email = lower(btrim(u.email)))
+  from auth.users u
+  order by 5 desc nulls last;
+end;
+$$;
+
+-- The newest activity, for everyone or one account. At most 500 rows per call.
+create or replace function public.tester_activity(p_user uuid default null, p_limit integer default 100)
+returns table (created_at timestamptz, user_id uuid, email text, event text, screen text, detail text, platform text)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.beta_require_admin();
+  return query
+  select e.created_at, e.user_id, u.email::text, e.event, e.screen, e.detail, e.platform
+  from public.activity_events e
+  join auth.users u on u.id = e.user_id
+  where p_user is null or e.user_id = p_user
+  order by e.created_at desc
+  limit least(greatest(coalesce(p_limit, 100), 1), 500);
+end;
+$$;
+
+revoke execute on function public.tester_overview() from public, anon;
+revoke execute on function public.tester_activity(uuid, integer) from public, anon;
+grant execute on function public.tester_overview() to authenticated;
+grant execute on function public.tester_activity(uuid, integer) to authenticated;

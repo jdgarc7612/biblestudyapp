@@ -10,7 +10,7 @@
  */
 
 export const LEGAL_DRAFT = false;
-export const LEGAL_UPDATED = "November 20, 2026";
+export const LEGAL_UPDATED = "November 23, 2026";
 /** Temporary until the app has its own address. */
 export const CONTACT_EMAIL = "cornerstoneandink@gmail.com";
 /** Who runs Omeora. */
@@ -31,7 +31,7 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "The short version",
     body: [
-      "Omeora is a Bible study app. We collect as little as we can, we never sell your information, and there are no ads or tracking. If you don't make an account, your study stays on your device.",
+      "Omeora is a Bible study app. We collect as little as we can, we never sell your information, and there are no ads or third-party trackers. If you don't make an account, your study stays on your device.",
     ],
   },
   {
@@ -49,8 +49,15 @@ export const PRIVACY: LegalSection[] = [
       "• your memory verses and review schedule",
       "• your reading and guided study progress, streaks, badges and tokens",
       "• your settings, such as your first name and preferred translation",
+      "• your Ask AI answers and the questions that led to them, so you can find them again",
       "We also count how many free Ask AI questions you've used each day, to apply the daily limit.",
-      "Your Ask AI conversations are not saved to your account. They stay on the device you used.",
+    ],
+  },
+  {
+    heading: "How you use Omeora (during the test)",
+    body: [
+      "While Omeora is in its private test, we record which screens and features you use when you're signed in, such as opening a chapter, a Setting card or Go Deeper, asking AI, or finishing a memory review, with the time, the book and chapter, and your device type. We use it only to see what's helpful and improve the app.",
+      "We never record the text of your notes, your Ask AI questions or answers, or your guided study answers this way. Only Josh can see this activity, and it's deleted with your account.",
     ],
   },
   {
@@ -69,7 +76,7 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "Who helps us run Omeora",
     body: [
-      "• Supabase stores accounts, synced study and feedback.",
+      "• Supabase stores accounts, synced study, test activity and feedback.",
       "• Cloudflare runs our Ask AI server. It sees your IP address, which we use only to slow down floods of requests.",
       "• Anthropic writes Ask AI answers.",
       "• GitHub hosts the Omeora website.",
@@ -80,7 +87,7 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "Deleting your data",
     body: [
-      "You can delete your account anytime in Profile → Delete account. That permanently deletes your email, everything synced to your account and any feedback linked to it, and clears it from that device. It can't be undone.",
+      "You can delete your account anytime in Profile → Delete account. That permanently deletes your email, everything synced to your account, your recorded activity and any feedback linked to it, and clears it from that device. It can't be undone.",
     ],
   },
   {

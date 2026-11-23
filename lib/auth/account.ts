@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { useAppStore } from "../../store/useAppStore";
+import { flushActivity, setActivityUser } from "../activity";
 import { friendlySignInError } from "../beta";
 import { getSupabase } from "../supabase";
 import { flushSync, setSyncUser, startSync } from "../sync";
@@ -56,6 +57,7 @@ export function initAccount() {
     });
     // Supabase asks that no other Supabase call runs inside this callback, so defer the sync.
     setTimeout(() => {
+      setActivityUser(u?.id ?? null);
       void setSyncUser(u?.id ?? null).then(() => {
         if (u) fillInName(u.user_metadata);
       });
@@ -86,6 +88,7 @@ export async function signOut(): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
   await flushSync();
+  await flushActivity();
   await setSyncUser(null);
   await supabase.auth.signOut();
   useAppStore.getState().resetLocalData();

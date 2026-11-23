@@ -28,11 +28,11 @@ export function noteScreen(pathname: string) {
   lastScreen = pathname;
 }
 
-function appVersion() {
+export function appVersion() {
   return Constants.expoConfig?.version ?? "";
 }
 
-function platformLabel() {
+export function platformLabel() {
   if (Platform.OS !== "web") return Platform.OS;
   if (typeof window === "undefined") return "web";
   return `web ${window.innerWidth}px`;
