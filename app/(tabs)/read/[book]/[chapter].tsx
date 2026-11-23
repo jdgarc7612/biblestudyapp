@@ -35,6 +35,7 @@ import {
   verseRangeId,
 } from "../../../../lib/bible";
 import { chapterAnswerMarks } from "../../../../lib/ai-answers";
+import { placeHeadings, useChapterHeadings, type ChapterHeading } from "../../../../lib/headings";
 import { localDateString } from "../../../../lib/date";
 import { selectionNoteStatus } from "../../../../lib/notes";
 import { track } from "../../../../lib/activity";
@@ -131,6 +132,21 @@ function ChapterReader({
   const translation = useAppStore((state) => state.translation);
   const setLastRead = useAppStore((state) => state.setLastRead);
   const chapterData = useChapter(translation, bookId, chapterNum);
+  // BSB section headings, shown above the same verse in every translation (lib/headings.ts).
+  const headingEntries = useChapterHeadings(bookId, chapterNum);
+  const chapterVerses = chapterData.verses;
+  const sections = useMemo(() => {
+    const placed = placeHeadings(headingEntries, chapterVerses.map((v) => v.verse));
+    const out: { headings: ChapterHeading[]; verses: typeof chapterVerses }[] = [];
+    for (const v of chapterVerses) {
+      const headings = placed.get(v.verse);
+      if (headings || out.length === 0) out.push({ headings: headings ?? [], verses: [] });
+      out[out.length - 1].verses.push(v);
+    }
+    return out;
+  }, [headingEntries, chapterVerses]);
+  // A psalm's opening heading goes above its superscription, as in printed Bibles.
+  const headingsAboveTitle = chapterData.title ? (sections[0]?.headings ?? []) : [];
   const contextNote = contextNoteForChapter(bookId, chapterNum);
   const deepDiveAvailable = !!contextNote && hasDeepDive(bookId, chapterNum);
   const [deepDiveOpen, setDeepDiveOpen] = useState(false);
@@ -496,6 +512,13 @@ function ChapterReader({
         >
           {chapterTitle(book.name, chapterNum)}
         </Text>
+        {headingsAboveTitle.length > 0 ? (
+          <View className="mt-3">
+            {headingsAboveTitle.map((h, i) => (
+              <SectionHeading key={`${h.verse}-${i}`} heading={h} tight />
+            ))}
+          </View>
+        ) : null}
         {chapterData.title ? (
           <Text
             style={{ fontFamily: serifFont }}
@@ -538,12 +561,19 @@ function ChapterReader({
             </Pressable>
           </View>
         ) : (
+        <View onLayout={(ev) => scrollToInitialVerse(ev.nativeEvent.layout.height)}>
+          {sections.map((section, si) => {
+            const headings = si === 0 && headingsAboveTitle.length > 0 ? [] : section.headings;
+            return (
+              <View key={section.verses[0]?.verse ?? si}>
+                {headings.map((h, i) => (
+                  <SectionHeading key={`${h.verse}-${i}`} heading={h} tight={si === 0 || i > 0} />
+                ))}
         <Text
           style={{ fontFamily: serifFont }}
           className="text-lg leading-8 text-gray-900 dark:text-gray-100"
-          onLayout={(ev) => scrollToInitialVerse(ev.nativeEvent.layout.height)}
         >
-          {chapterData.verses.map((v) => {
+          {section.verses.map((v) => {
             const noted = notedRanges.some((r) => r && v.verse === r.end);
             // In the Memory deck (earth wash), not the Saved list.
             const inMemory = savedRanges.some((r) => r && v.verse >= r.start && v.verse <= r.end);
@@ -603,6 +633,10 @@ function ChapterReader({
             );
           })}
         </Text>
+              </View>
+            );
+          })}
+        </View>
         )}
         {!chapterData.loading && !chapterData.error && (
           <Text className="text-[11px] text-gray-300 dark:text-gray-600 mt-8">
@@ -887,5 +921,37 @@ function BarAction({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * A BSB section heading above its verse: quiet, not selectable, and not part of any verse.
+ * `tight` drops the space above when it opens the text or follows another heading.
+ */
+function SectionHeading({ heading, tight = false }: { heading: ChapterHeading; tight?: boolean }) {
+  if (heading.level === 0) {
+    return (
+      <Text
+        accessibilityRole="header"
+        style={NO_SELECT}
+        className={`text-xs font-semibold uppercase tracking-widest text-brand-earth ${tight ? "mt-1" : "mt-6"} mb-1`}
+      >
+        {heading.text}
+      </Text>
+    );
+  }
+  const sub = heading.level === 2;
+  return (
+    <Text
+      accessibilityRole="header"
+      style={NO_SELECT}
+      className={
+        sub
+          ? `text-sm font-semibold text-gray-500 dark:text-gray-400 ${tight ? "mt-1" : "mt-4"} mb-1`
+          : `text-base font-semibold text-gray-800 dark:text-gray-200 ${tight ? "mt-1" : "mt-7"} mb-1.5`
+      }
+    >
+      {heading.text}
+    </Text>
   );
 }
