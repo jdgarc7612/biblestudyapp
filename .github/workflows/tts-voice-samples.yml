@@ -1,0 +1,24 @@
+name: TTS voice samples
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/project-thread-paj95p]
+    paths: [scripts/tts-voice-samples.mjs, .github/workflows/tts-voice-samples.yml]
+permissions:
+  contents: write
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/tts-voice-samples.mjs
+        env:
+          GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
+      - name: Commit samples
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          git add samples/voices
+          git commit -m "Add Chirp 3 HD voice samples [skip ci]" && git push || echo "nothing to commit"
