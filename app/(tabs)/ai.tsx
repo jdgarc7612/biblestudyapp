@@ -16,6 +16,7 @@ import { NOTE_RESULT_TEXT, useAddAnswerToNote } from "../../components/ai/answer
 import { FormattedText } from "../../components/ai/formatted-text";
 import { serifFont } from "../../constants/fonts";
 import { AI_DAILY_QUESTION_LIMIT, isLiveAiConfigured } from "../../lib/ai-config";
+import { dailyQuestionLimit } from "../../lib/study-journal";
 import { askStudyCompanion } from "../../lib/ai-client";
 import { answerPassage, listAnswers } from "../../lib/ai-answers";
 import { isTranslationId, type FoundReference } from "../../lib/bible";
@@ -62,6 +63,7 @@ export default function AskAIScreen() {
   const aiFreeQuestionsAskedToday = useAppStore((state) => state.aiFreeQuestionsAskedToday);
   const aiFreeQuestionsAskedTodayDate = useAppStore((state) => state.aiFreeQuestionsAskedTodayDate);
   const savedTranslation = useAppStore((state) => state.translation);
+  const aiStudyBonusDate = useAppStore((state) => state.aiStudyBonusDate);
   const aiAnswers = useAppStore((state) => state.aiAnswers);
   const recordAiAnswer = useAppStore((state) => state.recordAiAnswer);
   const setAiAnswerSaved = useAppStore((state) => state.setAiAnswerSaved);
@@ -83,7 +85,10 @@ export default function AskAIScreen() {
   const today = localDateString();
   const freeAskedToday =
     aiFreeQuestionsAskedTodayDate === today ? aiFreeQuestionsAskedToday : 0;
-  const questionsLeft = Math.max(0, AI_DAILY_QUESTION_LIMIT - freeAskedToday);
+  // A finished Study journal entry adds a question for the day (lib/study-journal.ts).
+  const dailyLimit = dailyQuestionLimit(AI_DAILY_QUESTION_LIMIT, aiStudyBonusDate, today);
+  const hasBonus = dailyLimit > AI_DAILY_QUESTION_LIMIT;
+  const questionsLeft = Math.max(0, dailyLimit - freeAskedToday);
   const canSend = questionsLeft > 0 && !isThinking;
   const translation =
     params.translation && isTranslationId(params.translation) ? params.translation : savedTranslation;
@@ -133,13 +138,13 @@ export default function AskAIScreen() {
       });
       // Signed in: the account's count is the one that matters, wherever else it was used today.
       if (result.remaining !== undefined) {
-        setAiQuestionsUsedToday(Math.max(0, AI_DAILY_QUESTION_LIMIT - result.remaining));
+        setAiQuestionsUsedToday(Math.max(0, dailyLimit - result.remaining));
       } else {
         recordAiQuestionAsked();
       }
       claimOnboardingBonus("firstAiQuestion");
     } else {
-      if (result.limitReached) setAiQuestionsUsedToday(AI_DAILY_QUESTION_LIMIT);
+      if (result.limitReached) setAiQuestionsUsedToday(dailyLimit);
       setFailed({ message: result.message, question, context });
     }
     setIsThinking(false);
@@ -425,14 +430,16 @@ export default function AskAIScreen() {
           <View className="flex-row items-center mx-5 mb-2 px-3 py-2.5 rounded-xl bg-brand-earth/10">
             <Ionicons name="hourglass-outline" size={14} color="#C19A6B" />
             <Text className="flex-1 text-xs text-gray-600 dark:text-gray-300 ml-2">
-              That&apos;s all {AI_DAILY_QUESTION_LIMIT} of today&apos;s questions. You get{" "}
+              That&apos;s all {dailyLimit} of today&apos;s questions. You get{" "}
               {AI_DAILY_QUESTION_LIMIT} more tomorrow, and the Bible is always open in the meantime.
+              {hasBonus ? "" : " Finishing a SOAP study in the Study tab adds one more today."}
             </Text>
           </View>
         ) : (
-          questionsLeft < AI_DAILY_QUESTION_LIMIT && (
+          questionsLeft < dailyLimit && (
             <Text className="text-[11px] text-gray-400 dark:text-gray-500 mx-5 mb-1.5">
-              {questionsLeft} of {AI_DAILY_QUESTION_LIMIT} free questions left today
+              {questionsLeft} of {dailyLimit} free questions left today
+              {hasBonus ? " (1 for finishing a study)" : ""}
             </Text>
           )
         )}

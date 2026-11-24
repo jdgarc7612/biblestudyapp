@@ -296,8 +296,11 @@ create table if not exists public.ai_usage (
   user_id uuid not null references auth.users (id) on delete cascade,
   day date not null,
   questions integer not null default 0,
+  -- Extra questions earned that day (finishing a study: supabase/study-bonus.sql).
+  bonus integer not null default 0,
   primary key (user_id, day)
 );
+alter table public.ai_usage add column if not exists bonus integer not null default 0;
 
 alter table public.ai_usage enable row level security;
 revoke all on public.ai_usage from anon, authenticated;
@@ -320,7 +323,7 @@ begin
     raise exception 'This test is invite-only.' using errcode = '42501';
   end if;
   return coalesce(
-    (select questions from public.ai_usage where user_id = uid and day = p_day), 0);
+    (select questions - bonus from public.ai_usage where user_id = uid and day = p_day), 0);
 end;
 $$;
 
@@ -349,12 +352,45 @@ begin
   insert into public.ai_usage (user_id, day, questions)
   values (uid, p_day, 1)
   on conflict (user_id, day) do update set questions = public.ai_usage.questions + 1
-  returning questions into n;
+  returning questions - bonus into n;
   -- Old days are no longer needed.
   delete from public.ai_usage where user_id = uid and day < utc_today - 7;
   return n;
 end;
 $$;
+
+-- Records that the signed-in person finished a study today: one bonus question, at most one a day.
+-- Returns the day's count (questions minus bonus), like the functions above.
+create or replace function public.claim_study_bonus(p_day date)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  uid uuid := auth.uid();
+  utc_today date := (now() at time zone 'utc')::date;
+  n integer;
+begin
+  if uid is null then
+    raise exception 'not signed in' using errcode = '28000';
+  end if;
+  if not public.beta_allows_me() then
+    raise exception 'This test is invite-only.' using errcode = '42501';
+  end if;
+  if p_day is null or abs(p_day - utc_today) > 1 then
+    p_day := utc_today;
+  end if;
+  insert into public.ai_usage (user_id, day, questions, bonus)
+  values (uid, p_day, 0, 1)
+  on conflict (user_id, day) do update set bonus = 1
+  returning questions - bonus into n;
+  return n;
+end;
+$$;
+
+revoke execute on function public.claim_study_bonus(date) from public, anon;
+grant execute on function public.claim_study_bonus(date) to authenticated;
 
 -- Deletes the signed-in person's account. Their synced data and AI counts go with it
 -- (the "on delete cascade" above).

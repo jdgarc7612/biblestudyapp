@@ -48,6 +48,8 @@ export default function RootLayout() {
           <Stack.Screen name="notes" />
           <Stack.Screen name="answers/index" />
           <Stack.Screen name="answers/[id]" />
+          <Stack.Screen name="journal/index" />
+          <Stack.Screen name="journal/entry" />
           <Stack.Screen name="shop" />
           <Stack.Screen name="memory/index" />
           <Stack.Screen name="memory/challenge" />

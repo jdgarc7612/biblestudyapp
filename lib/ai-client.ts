@@ -93,3 +93,76 @@ export async function askStudyCompanion(req: AskRequest): Promise<AskResult> {
     clearTimeout(timer);
   }
 }
+
+export interface HintRequest {
+  step: "scripture" | "observation" | "application" | "prayer";
+  reference: string;
+  text: string;
+  translation: TranslationId;
+  /** What the reader has written on this step so far. */
+  draft: string;
+}
+
+export type HintResult =
+  | { ok: true; hint: string; live: boolean }
+  | { ok: false; message: string; signedOut?: boolean };
+
+/**
+ * A short hint for one step of a Study journal entry. Never counts toward the daily questions.
+ * Without a live endpoint it returns nothing from the AI (the screen shows its own questions).
+ */
+export async function getStudyHint(req: HintRequest): Promise<HintResult> {
+  if (!isLiveAiConfigured) {
+    await new Promise((r) => setTimeout(r, 500));
+    return {
+      ok: true,
+      live: false,
+      hint: `Look again at ${req.reference}. Which words would you underline, and why do you think they're there?`,
+    };
+  }
+  const headers = await accountHeaders();
+  if (!headers.Authorization) return { ok: false, message: "Sign in to get hints on this passage.", signedOut: true };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(`${AI_ENDPOINT}/hint`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({
+        method: "soap",
+        step: req.step,
+        verse: { reference: req.reference, text: req.text },
+        translation: req.translation,
+        draft: req.draft,
+      }),
+      signal: controller.signal,
+    });
+    const data = (await res.json().catch(() => ({}))) as { hint?: string; error?: string; code?: string };
+    if (res.ok && data.hint) return { ok: true, hint: data.hint, live: true };
+    return {
+      ok: false,
+      message: data.error ?? "I couldn't get a hint just now. Please try again.",
+      signedOut: data.code === "signed_out",
+    };
+  } catch {
+    return { ok: false, message: "I couldn't reach the study companion. Check your connection and try again." };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Tells the account that a study was finished today, which adds one Ask AI question for the day
+ * (supabase/study-bonus.sql). Safe to call more than once a day. Guests keep the bonus on the device.
+ */
+export async function claimStudyBonus(day: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return;
+  try {
+    await supabase.rpc("claim_study_bonus", { p_day: day });
+  } catch {
+    // The day's bonus still shows on this device; the account just won't count it.
+  }
+}

@@ -17,6 +17,8 @@
  * - Highlights and saved verses are combined by verse range the same way; removals are kept as
  *   tombstones so they win over an older copy.
  * - Guided study progress is combined by plan, and answers by question; the more recently changed copy wins.
+ * - Study journal entries are combined by id, newest change wins; deleted ones stay as small marks.
+ *   The date a study last earned the bonus Ask AI question takes the later one.
  * - Ask AI answers are combined by id, newest change wins, deletions kept as tombstones; then
  *   history is capped (all saved answers, the newest unsaved ones; see lib/ai-answers.ts).
  * - Badges and claimed bonuses are combined.
@@ -58,6 +60,8 @@ export const SYNCED_KEYS = [
   "savedVerses",
   "planProgress",
   "planAnswers",
+  "studyEntries",
+  "aiStudyBonusDate",
   "aiAnswers",
   "currentReadStreak",
   "longestReadStreak",
@@ -143,6 +147,9 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
     if (!answers[id] || answer.updatedAt > answers[id].updatedAt) answers[id] = answer;
   }
   merged.planAnswers = answers;
+  merged.studyEntries = mergeByUpdatedAt(local.studyEntries, remote.studyEntries);
+  const bonusDates = [local.aiStudyBonusDate, remote.aiStudyBonusDate].filter((d): d is string => !!d).sort();
+  merged.aiStudyBonusDate = bonusDates[bonusDates.length - 1] ?? null;
   merged.aiAnswers = mergeAnswers(local.aiAnswers, remote.aiAnswers);
 
   const read = streakWinner(local, remote, "lastReadDate", "currentReadStreak");

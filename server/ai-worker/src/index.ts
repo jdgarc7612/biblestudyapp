@@ -7,12 +7,18 @@
  *   -> 200 { answer, remaining? }   (remaining: free questions left today, for signed-in readers)
  *   -> 4xx/5xx { error, code? }     (code "daily_limit" when today's free questions are used up)
  *
+ * POST /hint { method: "soap", step, verse: { reference, text }, translation?, draft? }
+ *   A short nudge for one step of a Study journal entry. Needs a signed-in (invited) reader when
+ *   accounts are set up. Hints never count toward the daily questions; the app limits how many a
+ *   study gets (lib/study-journal.ts).
+ *   -> 200 { hint }
+ *
  * The Anthropic API key lives only here, as the ANTHROPIC_API_KEY secret.
  */
 import Anthropic from "@anthropic-ai/sdk";
 
 import { AccountQuota, accountDay, inviteGateOn, makeAccountQuota } from "./quota";
-import { SYSTEM_PROMPT } from "./prompt";
+import { HINT_PROMPT, SYSTEM_PROMPT } from "./prompt";
 
 export interface Env {
   ANTHROPIC_API_KEY: string;
@@ -51,6 +57,51 @@ export interface ValidAsk {
 }
 
 class BadRequest extends Error {}
+
+const HINT_STEPS = new Set(["scripture", "observation", "application", "prayer"]);
+const MAX_DRAFT_CHARS = 1500;
+
+export interface ValidHint {
+  step: "scripture" | "observation" | "application" | "prayer";
+  verse: { reference: string; text: string };
+  translation?: string;
+  draft: string;
+}
+
+export function validateHint(body: {
+  method?: unknown;
+  step?: unknown;
+  verse?: { reference?: unknown; text?: unknown } | null;
+  translation?: unknown;
+  draft?: unknown;
+}): ValidHint {
+  if (str(body.method) !== "soap") throw new BadRequest("Unknown study method.");
+  const step = str(body.step);
+  if (!HINT_STEPS.has(step)) throw new BadRequest("Unknown study step.");
+  const reference = body.verse && typeof body.verse === "object" ? str(body.verse.reference).slice(0, 80) : "";
+  const text = body.verse && typeof body.verse === "object" ? str(body.verse.text).slice(0, MAX_VERSE_CHARS) : "";
+  if (!reference || !text) throw new BadRequest("Please include the passage.");
+  const translation = TRANSLATIONS.has(str(body.translation)) ? str(body.translation) : undefined;
+  return { step: step as ValidHint["step"], verse: { reference, text }, translation, draft: str(body.draft).slice(0, MAX_DRAFT_CHARS) };
+}
+
+const STEP_ASKS: Record<ValidHint["step"], string> = {
+  scripture: "I'm on the Scripture step: reading slowly and copying out the words that stand out.",
+  observation: "I'm on the Observation step: noticing what the passage says.",
+  application: "I'm on the Application step: working out how it applies to my life today.",
+  prayer: "I'm on the Prayer step: writing a prayer in response.",
+};
+
+export function buildHintMessage(hint: ValidHint): string {
+  const label = hint.translation ? ` (${hint.translation})` : "";
+  const parts = [
+    `I'm doing a SOAP study of ${hint.verse.reference}${label}:\n<passage>\n${hint.verse.text}\n</passage>`,
+    STEP_ASKS[hint.step],
+  ];
+  if (hint.draft) parts.push(`What I've written so far:\n<draft>\n${hint.draft}\n</draft>`);
+  parts.push("Give me a hint for this step.");
+  return parts.join("\n\n");
+}
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
@@ -139,7 +190,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/") {
       return json({ ok: true, service: "deepword-ai" }, 200, cors);
     }
-    if (request.method !== "POST" || url.pathname !== "/ask") {
+    if (request.method !== "POST" || (url.pathname !== "/ask" && url.pathname !== "/hint")) {
       return json({ error: "Not found." }, 404, cors);
     }
     // Browsers must come from an allowed site. (The phone apps send no Origin header.)
@@ -157,6 +208,8 @@ export default {
         return json({ error: "That's a lot of questions at once. Please wait a minute and try again." }, 429, cors);
       }
     }
+
+    if (url.pathname === "/hint") return handleHint(request, env, cors);
 
     let ask: ValidAsk;
     try {
@@ -251,3 +304,53 @@ export default {
     }
   },
 };
+
+/** One short hint for a Study journal step. Never counted toward the daily questions. */
+async function handleHint(request: Request, env: Env, cors: Record<string, string>): Promise<Response> {
+  let hint: ValidHint;
+  try {
+    hint = validateHint((await request.json()) as Parameters<typeof validateHint>[0]);
+  } catch (err) {
+    const message = err instanceof BadRequest ? err.message : "That request couldn't be read.";
+    return json({ error: message }, 400, cors);
+  }
+
+  // Hints are for signed-in readers (and, while the test is invite-only, invited ones).
+  if (env.SUPABASE_URL && env.SUPABASE_KEY) {
+    const token = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return json({ error: "Please sign in to get hints.", code: "signed_out" }, 401, cors);
+    const check = await makeAccountQuota(
+      env.SUPABASE_URL,
+      env.SUPABASE_KEY,
+      token,
+      accountDay(request.headers.get("X-Timezone"))
+    ).used();
+    if (check === "signed_out") return json({ error: "Please sign in again to get hints.", code: "signed_out" }, 401, cors);
+    if (check === "unavailable") return json({ error: "Something went wrong. Please try again." }, 503, cors);
+  }
+
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2, timeout: 30_000 });
+  try {
+    const response = await client.messages.create({
+      model: env.MODEL || DEFAULT_MODEL,
+      max_tokens: 600,
+      output_config: { effort: "low" },
+      system: [{ type: "text", text: HINT_PROMPT, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: buildHintMessage(hint) }],
+    });
+    const text = response.content
+      .flatMap((block) => (block.type === "text" ? [block.text] : []))
+      .join("\n\n")
+      .trim();
+    if (response.stop_reason === "refusal" || !text) {
+      return json({ error: "No hint came back. Try the questions above instead." }, 502, cors);
+    }
+    return json({ hint: text }, 200, cors);
+  } catch (err) {
+    if (err instanceof Anthropic.RateLimitError) {
+      return json({ error: "The study companion is busy right now. Please try again shortly." }, 429, cors);
+    }
+    console.error("Hint error", err instanceof Anthropic.APIError ? err.status : err);
+    return json({ error: "Something went wrong. Please try again." }, 502, cors);
+  }
+}

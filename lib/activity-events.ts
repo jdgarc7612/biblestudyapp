@@ -29,6 +29,9 @@ export const ACTIVITY_EVENTS = {
   plan_start: "Started a guided study",
   plan_day_done: "Finished a study day",
   plan_answer: "Answered a reflection question",
+  study_start: "Started a SOAP study",
+  study_hint: "Asked for a study hint",
+  study_finish: "Finished a SOAP study",
   translation: "Changed translation",
   feedback_sent: "Sent feedback",
 } as const;
@@ -46,6 +49,8 @@ const SCREEN_LABELS: Record<string, string> = {
   "/read/[book]/[chapter]": "Reading a chapter",
   "/study": "Study",
   "/study/plans/[id]": "Guided study",
+  "/journal": "Study journal",
+  "/journal/entry": "A SOAP study",
   "/ai": "Ask AI",
   "/profile": "Profile",
   "/notes": "My notes",

@@ -37,7 +37,7 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "If you use Omeora without an account",
     body: [
-      "Your reading progress, notes, guided study answers, memory verses, streaks and Ask AI conversations are saved only on your device (or in your browser). We can't see them. Clearing the app's data or your browser's site data erases them.",
+      "Your reading progress, notes, guided study answers, study journal entries, memory verses, streaks and Ask AI conversations are saved only on your device (or in your browser). We can't see them. Clearing the app's data or your browser's site data erases them.",
     ],
   },
   {
@@ -45,7 +45,7 @@ export const PRIVACY: LegalSection[] = [
     body: [
       "We keep your email address (or the account details Apple or Google share when you sign in with them) so you can sign in.",
       "We keep a copy of your study so it follows you to any device:",
-      "• your notes and guided study answers",
+      "• your notes, guided study answers and study journal entries",
       "• your memory verses and review schedule",
       "• your reading and guided study progress, streaks, badges and tokens",
       "• your settings, such as your first name and preferred translation",
@@ -57,13 +57,13 @@ export const PRIVACY: LegalSection[] = [
     heading: "How you use Omeora (during the test)",
     body: [
       "While Omeora is in its private test, we record which screens and features you use when you're signed in, such as opening a chapter, a Setting card or Go Deeper, asking AI, or finishing a memory review, with the time, the book and chapter, and your device type. We use it only to see what's helpful and improve the app.",
-      "We never record the text of your notes, your Ask AI questions or answers, or your guided study answers this way. Only Josh can see this activity, and it's deleted with your account.",
+      "We never record the text of your notes, your Ask AI questions or answers, your guided study answers or your study journal this way. Only Josh can see this activity, and it's deleted with your account.",
     ],
   },
   {
     heading: "Ask AI",
     body: [
-      "When you ask a question, we send it, the verse you're asking about (if any) and the last few messages of that conversation to Anthropic, the company that makes the Claude AI model, so it can write an answer. The request passes through our server, which doesn't keep a copy.",
+      "When you ask a question, we send it, the verse you're asking about (if any) and the last few messages of that conversation to Anthropic, the company that makes the Claude AI model, so it can write an answer. When you ask for a hint in a study, we send the passage and what you've written on that step. Requests pass through our server, which doesn't keep a copy.",
       "Anthropic processes these requests under its commercial terms, which don't allow it to train its models on them. It may keep them for a limited time for safety and abuse monitoring. Please don't put private details about yourself or others in a question.",
     ],
   },
@@ -78,7 +78,7 @@ export const PRIVACY: LegalSection[] = [
     body: [
       "• Supabase stores accounts, synced study, test activity and feedback.",
       "• Cloudflare runs our Ask AI server. It sees your IP address, which we use only to slow down floods of requests.",
-      "• Anthropic writes Ask AI answers.",
+      "• Anthropic writes Ask AI answers and study hints.",
       "• GitHub hosts the Omeora website.",
       "• Apple and Google, only if you choose to sign in with them.",
       "Each of them handles data under its own privacy policy. We don't share your information with anyone else, and we never sell it.",

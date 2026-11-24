@@ -18,6 +18,7 @@ import { getBookIntro } from "../../data/study/book-intros";
 import { contextNoteFor, type ContextNote } from "../../data/study/context-notes";
 import { formatReference, getBook, type TranslationId } from "../../lib/bible";
 import { notesCovering } from "../../lib/notes";
+import { studiesCovering } from "../../lib/study-journal";
 import {
   useCrossReferences,
   useCrossReferenceText,
@@ -59,6 +60,8 @@ interface Props {
   onInsights: () => void;
   onAsk: (question?: string) => void;
   onOpen: (target: OpenTarget) => void;
+  /** Starts a SOAP study of this passage, or opens one (by id) written on it before. */
+  onJournal: (studyId?: string) => void;
   initialTab?: StudyTab;
   initialWord?: number;
 }
@@ -71,6 +74,8 @@ export function StudyPanel(props: Props) {
   const intro = getBookIntro(props.bookId);
   const verseNotes = useAppStore((s) => s.verseNotes);
   const noteCount = notesCovering(verseNotes, props.bookId, props.chapter, props.start, props.end).length;
+  const studyEntries = useAppStore((s) => s.studyEntries);
+  const pastStudy = studiesCovering(studyEntries, props.bookId, props.chapter, props.start, props.end)[0];
 
   useEffect(() => {
     if (props.visible) setTab(props.initialTab ?? "words");
@@ -150,6 +155,30 @@ export function StudyPanel(props: Props) {
                   selected={props.isInDeck}
                 />
               </View>
+
+              <Pressable
+                onPress={() => props.onJournal()}
+                accessibilityRole="button"
+                accessibilityLabel={`Study ${props.reference} with the SOAP journal`}
+                className="flex-row items-center rounded-2xl px-4 py-3 mb-2 bg-brand-blue/10 dark:bg-brand-blue/20 active:opacity-70"
+              >
+                <Ionicons name="create-outline" size={18} color={BLUE} />
+                <View className="flex-1 ml-3">
+                  <Text className="text-[15px] font-semibold text-gray-900 dark:text-white">Study this passage</Text>
+                  <Text className="text-xs text-gray-500 dark:text-gray-400">Scripture, Observation, Application, Prayer</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={BLUE} />
+              </Pressable>
+              {pastStudy ? (
+                <Pressable onPress={() => props.onJournal(pastStudy.id)} hitSlop={6} className="flex-row items-center self-start mb-5 active:opacity-60">
+                  <Ionicons name={pastStudy.finishedAt ? "checkmark-circle" : "ellipse-outline"} size={13} color={EARTH} />
+                  <Text className="text-xs font-semibold text-brand-blue dark:text-blue-300 ml-1.5">
+                    {pastStudy.finishedAt ? "Read your study of" : "Continue your study of"} {pastStudy.reference}
+                  </Text>
+                </Pressable>
+              ) : (
+                <View className="h-3" />
+              )}
 
               <View
                 className="flex-row rounded-2xl bg-gray-100 dark:bg-gray-800 p-1 mb-5"
