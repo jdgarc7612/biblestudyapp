@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PlanProgressBar } from "../../../components/plans/progress-bar";
+import { JournalCard } from "../../../components/study/journal-card";
 import { MemoryPanel } from "../../../components/study/memory-panel";
 import { serifFont } from "../../../constants/fonts";
 import { localDateString } from "../../../lib/date";
@@ -95,6 +96,8 @@ export default function StudyScreen() {
 
         {side === "plans" ? (
           <>
+            <JournalCard />
+            <View className="h-6" />
             {active && (
               <>
                 <SectionLabel>{"You're following"}</SectionLabel>

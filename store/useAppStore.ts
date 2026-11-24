@@ -33,6 +33,17 @@ import {
 } from "../lib/ai-answers";
 import storage from "../lib/storage";
 import {
+  canFinish,
+  dailyQuestionLimit,
+  deletedStudy,
+  hintsLeft,
+  makeStudyId,
+  newSoapEntry,
+  type Passage,
+  type SoapStep,
+  type StudyEntry,
+} from "../lib/study-journal";
+import {
   applyHighlight,
   type HighlightColor,
   type SavedVerse,
@@ -42,6 +53,7 @@ import {
 export type { MemoryCard, MemoryList, MemoryMethod, NewMemoryCard } from "../lib/memory";
 export type { MemoryChallenge } from "../lib/memory-challenge";
 export type { AiAnswer } from "../lib/ai-answers";
+export type { StudyEntry } from "../lib/study-journal";
 
 export interface MemoryReminder {
   enabled: boolean;
@@ -140,6 +152,11 @@ interface AppState {
   /** Keyed "planId/day/question" (day and question from 1), see lib/plans.ts. */
   planAnswers: Record<string, PlanAnswer>;
 
+  /** Study journal entries (lib/study-journal.ts), keyed "study-...". Private, synced. */
+  studyEntries: Record<string, StudyEntry>;
+  /** Local date a study was last finished, which adds a bonus Ask AI question that day. */
+  aiStudyBonusDate: string | null;
+
   // Read streak
   currentReadStreak: number;
   longestReadStreak: number;
@@ -223,6 +240,16 @@ interface AppState {
   leavePlan: () => void;
   /** Saves (or, with empty text, deletes) an answer to a reflection question. */
   savePlanAnswer: (id: string, text: string) => void;
+  /** Starts a new SOAP study of a passage and returns its id. */
+  startStudy: (passage: Passage) => string;
+  /** Saves writing in one step of a study. */
+  saveStudyStep: (id: string, step: SoapStep, text: string) => void;
+  /** Keeps an AI hint on the study and counts it. False when none are left. */
+  recordStudyHint: (id: string, step: SoapStep, hint: string) => boolean;
+  /** Finishes a study. Returns true when this earned today's bonus Ask AI question. */
+  finishStudy: (id: string) => boolean;
+  /** Deletes a study; only a small mark stays so a sync does not bring it back. */
+  deleteStudy: (id: string) => void;
 
   logReadEngagement: () => void;
   logMemoryEngagement: () => void;
@@ -309,6 +336,9 @@ export const useAppStore = create<AppState>()(
       activePlanId: null,
       planProgress: {},
       planAnswers: {},
+
+      studyEntries: {},
+      aiStudyBonusDate: null,
 
       deletedCardIds: [],
       syncedUserId: null,
@@ -529,6 +559,58 @@ export const useAppStore = create<AppState>()(
           };
         }),
 
+      startStudy: (passage) => {
+        const id = makeStudyId();
+        const entry = newSoapEntry(passage, get().translation);
+        // The passage only; never what's written.
+        track("study_start", entry.reference);
+        set((state) => ({ studyEntries: { ...state.studyEntries, [id]: entry } }));
+        return id;
+      },
+
+      saveStudyStep: (id, step, text) =>
+        set((state) => {
+          const entry = state.studyEntries[id];
+          if (!entry || entry.deleted) return state;
+          const trimmed = text.trim();
+          if (entry[step] === trimmed) return state;
+          return { studyEntries: { ...state.studyEntries, [id]: { ...entry, [step]: trimmed, updatedAt: Date.now() } } };
+        }),
+
+      recordStudyHint: (id, step, hint) => {
+        const entry = get().studyEntries[id];
+        if (!entry || entry.deleted || hintsLeft(entry) <= 0) return false;
+        track("study_hint", step);
+        set((state) => ({
+          studyEntries: {
+            ...state.studyEntries,
+            [id]: { ...entry, hints: { ...entry.hints, [step]: hint }, hintsUsed: entry.hintsUsed + 1, updatedAt: Date.now() },
+          },
+        }));
+        return true;
+      },
+
+      finishStudy: (id) => {
+        const state = get();
+        const entry = state.studyEntries[id];
+        if (!entry || entry.deleted || !canFinish(entry)) return false;
+        const today = localDateString();
+        const earned = state.aiStudyBonusDate !== today;
+        if (!entry.finishedAt) track("study_finish", entry.reference);
+        set({
+          studyEntries: { ...state.studyEntries, [id]: { ...entry, finishedAt: entry.finishedAt ?? Date.now(), updatedAt: Date.now() } },
+          aiStudyBonusDate: today,
+        });
+        return earned;
+      },
+
+      deleteStudy: (id) =>
+        set((state) => {
+          const entry = state.studyEntries[id];
+          if (!entry || entry.deleted) return state;
+          return { studyEntries: { ...state.studyEntries, [id]: deletedStudy(entry, Date.now()) } };
+        }),
+
       saveVerseNote: (id, reference, text) =>
         set((state) => {
           const trimmed = text.trim();
@@ -651,7 +733,7 @@ export const useAppStore = create<AppState>()(
           state.aiFreeQuestionsAskedTodayDate === localDateString()
             ? state.aiFreeQuestionsAskedToday
             : 0;
-        return Math.max(0, AI_DAILY_QUESTION_LIMIT - askedToday);
+        return Math.max(0, dailyQuestionLimit(AI_DAILY_QUESTION_LIMIT, state.aiStudyBonusDate, localDateString()) - askedToday);
       },
 
       recordAiQuestionAsked: () => {

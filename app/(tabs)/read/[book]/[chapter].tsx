@@ -850,6 +850,15 @@ function ChapterReader({
           onInsights={() => goToAI("insights")}
           onAsk={(question) => goToAI(undefined, question)}
           onOpen={openPassage}
+          onJournal={(studyId) => {
+            setSheetOpen(false);
+            router.push({
+              pathname: "/journal/entry",
+              params: studyId
+                ? { id: studyId }
+                : { book: bookId, chapter: String(chapterNum), start: String(rangeStart), end: String(rangeEnd) },
+            });
+          }}
           initialTab={studyTab}
           initialWord={initialWord}
         />
