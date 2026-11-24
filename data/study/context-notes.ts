@@ -13,10 +13,7 @@ import { CONTEXT_NOTES_GOSPELS_ACTS } from "./context-notes-gospels-acts";
 import { CONTEXT_NOTES_PAUL } from "./context-notes-paul";
 import { CONTEXT_NOTES_LETTERS_REVELATION } from "./context-notes-letters-revelation";
 import { CONTEXT_NOTES_GENESIS_PSALMS_PROVERBS } from "./context-notes-genesis-psalms-proverbs";
-<<<<<<< HEAD
 import { CONTEXT_NOTES_LAW_HISTORY_PROPHETS } from "./context-notes-law-history-prophets";
-=======
->>>>>>> 0dee45c70c1c6f72da77bbb6cdbb9d11cc01bb96
 
 export interface WordToNotice {
   /** Verse the word appears in. */
@@ -1069,10 +1066,7 @@ export const CONTEXT_NOTES: ContextNote[] = [
   ...CONTEXT_NOTES_LETTERS_REVELATION,
   // ── Old Testament, every chapter (Nov 23) ─────────────────────
   ...CONTEXT_NOTES_GENESIS_PSALMS_PROVERBS,
-<<<<<<< HEAD
   ...CONTEXT_NOTES_LAW_HISTORY_PROPHETS,
-=======
->>>>>>> 0dee45c70c1c6f72da77bbb6cdbb9d11cc01bb96
 ];
 
 /** The note shown above a chapter, if any (the first note that starts in that chapter). */
