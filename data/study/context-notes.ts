@@ -16,6 +16,7 @@ import { CONTEXT_NOTES_GENESIS_PSALMS_PROVERBS } from "./context-notes-genesis-p
 import { CONTEXT_NOTES_LAW_HISTORY_PROPHETS } from "./context-notes-law-history-prophets";
 import { CONTEXT_NOTES_SAMUEL_WISDOM_JEREMIAH } from "./context-notes-samuel-wisdom-jeremiah";
 import { CONTEXT_NOTES_LAW_KINGS_CHRONICLES } from "./context-notes-law-kings-chronicles";
+import { CONTEXT_NOTES_RETURN_PROPHETS } from "./context-notes-return-prophets";
 
 export interface WordToNotice {
   /** Verse the word appears in. */
@@ -1071,6 +1072,7 @@ export const CONTEXT_NOTES: ContextNote[] = [
   ...CONTEXT_NOTES_LAW_HISTORY_PROPHETS,
   ...CONTEXT_NOTES_SAMUEL_WISDOM_JEREMIAH,
   ...CONTEXT_NOTES_LAW_KINGS_CHRONICLES,
+  ...CONTEXT_NOTES_RETURN_PROPHETS,
 ];
 
 /** The note shown above a chapter, if any (the first note that starts in that chapter). */
