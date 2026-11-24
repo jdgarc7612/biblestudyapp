@@ -14,6 +14,7 @@ import { CONTEXT_NOTES_PAUL } from "./context-notes-paul";
 import { CONTEXT_NOTES_LETTERS_REVELATION } from "./context-notes-letters-revelation";
 import { CONTEXT_NOTES_GENESIS_PSALMS_PROVERBS } from "./context-notes-genesis-psalms-proverbs";
 import { CONTEXT_NOTES_LAW_HISTORY_PROPHETS } from "./context-notes-law-history-prophets";
+import { CONTEXT_NOTES_SAMUEL_WISDOM_JEREMIAH } from "./context-notes-samuel-wisdom-jeremiah";
 
 export interface WordToNotice {
   /** Verse the word appears in. */
@@ -1067,6 +1068,7 @@ export const CONTEXT_NOTES: ContextNote[] = [
   // ── Old Testament, every chapter (Nov 23) ─────────────────────
   ...CONTEXT_NOTES_GENESIS_PSALMS_PROVERBS,
   ...CONTEXT_NOTES_LAW_HISTORY_PROPHETS,
+  ...CONTEXT_NOTES_SAMUEL_WISDOM_JEREMIAH,
 ];
 
 /** The note shown above a chapter, if any (the first note that starts in that chapter). */
