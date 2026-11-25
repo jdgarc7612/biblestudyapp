@@ -33,8 +33,9 @@ const AUTH = TOKEN
   : { 'X-Goog-Api-Key': KEY };
 
 // Gemini TTS: same Algenib voice, steered by a written direction.
-const TAKES = [['Algenib-Gemini', 'Algenib']];
-const PROMPT = 'Read this aloud as Holy Scripture: reverent, warm and sincere, at a natural, unhurried pace, like a seasoned narrator of an audio Bible. Not slow.';
+const TAKES = [['Algenib-Gemini-faster', 'Algenib']];
+const PROMPT = 'Read this aloud as Holy Scripture: reverent, warm and sincere, at a brisk, natural speaking pace, like a modern audiobook narrator. Keep it flowing; do not slow down, linger or draw out words.';
+const FASTER = 1.15; // speaking rate, dropped if the model rejects it
 // First model name the API accepts wins (newest first).
 const MODELS = ['gemini-3.8-flash-tts-preview', 'gemini-3.8-flash-tts', 'gemini-2.5-flash-tts'];
 const OUT = 'samples/voices-gemini';
@@ -62,6 +63,14 @@ function pcm(wav) { // strip RIFF header, return the data chunk
   }
   return wav.subarray(44);
 }
+function trim(buf) {
+  const n = buf.length >> 1, th = 400, keep = Math.round(0.05 * RATE);
+  let a = 0, b = n - 1;
+  while (a < n && Math.abs(buf.readInt16LE(a * 2)) < th) a++;
+  while (b > a && Math.abs(buf.readInt16LE(b * 2)) < th) b--;
+  a = Math.max(0, a - keep); b = Math.min(n - 1, b + keep);
+  return buf.subarray(a * 2, (b + 1) * 2);
+}
 function wavFile(data) {
   const h = Buffer.alloc(44);
   h.write('RIFF', 0); h.writeUInt32LE(36 + data.length, 4); h.write('WAVE', 8);
@@ -73,13 +82,14 @@ function wavFile(data) {
 
 mkdirSync(OUT, { recursive: true });
 let chars = 0;
+let rate = FASTER;
 const call = (text, voice, model) => fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', ...AUTH },
   body: JSON.stringify({
     input: { prompt: PROMPT, text },
     voice: { languageCode: 'en-US', name: voice, modelName: model },
-    audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: RATE },
+    audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: RATE, ...(rate ? { speakingRate: rate } : {}) },
   }),
 });
 let model = null;
@@ -87,10 +97,16 @@ for (const m of MODELS) {
   const r = await call('In the beginning.', 'Algenib', m);
   const b = await r.json().catch(() => ({}));
   if (r.ok && b.audioContent) { model = m; break; }
+  if (rate && r.status === 400 && !/not supported/.test(b.error?.message ?? '')) {
+    console.error(`speakingRate rejected (${b.error?.message ?? ''}); using the direction alone`);
+    rate = null;
+    const r2 = await call('In the beginning.', 'Algenib', m);
+    if (r2.ok) { model = m; break; }
+  }
   console.error(`model ${m}: HTTP ${r.status} ${b.error?.status ?? ''} ${b.error?.message ?? ''}`);
 }
 if (!model) process.exit(1);
-console.log(`using model ${model}`);
+console.log(`using model ${model}, speaking rate ${rate ?? 'default'}`);
 
 for (const [label, voice] of TAKES) {
   const parts = [silence(0.4)];
@@ -106,7 +122,7 @@ for (const [label, voice] of TAKES) {
       console.error(`${label}: HTTP ${res.status} ${body.error?.status ?? ''} ${body.error?.message ?? ''}`);
       process.exit(1);
     }
-    parts.push(pcm(Buffer.from(body.audioContent, 'base64')), silence(gap));
+    parts.push(trim(pcm(Buffer.from(body.audioContent, 'base64'))), silence(gap));
     chars += text.length;
   }
   writeFileSync(`${OUT}/${label}.wav`, wavFile(Buffer.concat(parts)));
