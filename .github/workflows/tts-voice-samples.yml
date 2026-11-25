@@ -16,9 +16,13 @@ jobs:
       - run: node scripts/tts-voice-samples.mjs
         env:
           GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
+      - name: Encode MP3
+        run: |
+          command -v ffmpeg || (sudo apt-get update -q && sudo apt-get install -yq ffmpeg)
+          for f in samples/voices-hq/*.wav; do ffmpeg -loglevel error -y -i "$f" -codec:a libmp3lame -b:a 160k "${f%.wav}.mp3" && rm "$f"; done
       - name: Commit samples
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
-          git add samples/voices
+          git add samples/voices-hq
           git commit -m "Add Chirp 3 HD voice samples [skip ci]" && git push || echo "nothing to commit"
