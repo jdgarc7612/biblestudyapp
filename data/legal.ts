@@ -10,7 +10,7 @@
  */
 
 export const LEGAL_DRAFT = false;
-export const LEGAL_UPDATED = "November 23, 2026";
+export const LEGAL_UPDATED = "November 25, 2026";
 /** Temporary until the app has its own address. */
 export const CONTACT_EMAIL = "cornerstoneandink@gmail.com";
 /** Who runs Omeora. */
