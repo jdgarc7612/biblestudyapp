@@ -2,9 +2,30 @@
 // request (as the full Bible would be), uncompressed, joined with short pauses.
 // Reads the key from GOOGLE_TTS_API_KEY. Writes WAV; the workflow encodes MP3.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createSign } from 'node:crypto';
 
 // Gemini voices need a service account token; Chirp works with the API key.
-const TOKEN = process.env.GOOGLE_ACCESS_TOKEN, PROJECT = process.env.GOOGLE_PROJECT_ID;
+// Mint a token straight from the service account file (no extra Google APIs needed).
+async function saToken(file) {
+  const sa = JSON.parse(readFileSync(file, 'utf8'));
+  const now = Math.floor(Date.now() / 1000);
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({
+    iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform',
+    aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600,
+  })}`;
+  const sig = createSign('RSA-SHA256').update(unsigned).sign(sa.private_key, 'base64url');
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${unsigned}.${sig}` }),
+  });
+  const b = await r.json().catch(() => ({}));
+  if (!b.access_token) { console.error(`token: HTTP ${r.status} ${b.error ?? ''} ${b.error_description ?? ''}`); process.exit(1); }
+  return { token: b.access_token, project: sa.project_id };
+}
+const credFile = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const { token: TOKEN, project: PROJECT } = credFile ? await saToken(credFile) : {};
 const KEY = process.env.GOOGLE_TTS_API_KEY;
 if (!TOKEN && !KEY) { console.error('No Google credentials set'); process.exit(1); }
 const AUTH = TOKEN

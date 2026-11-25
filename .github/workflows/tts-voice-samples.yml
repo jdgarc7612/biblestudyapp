@@ -17,11 +17,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GOOGLE_TTS_SA_KEY }}
-          token_format: access_token
       - run: node scripts/tts-voice-samples.mjs
-        env:
-          GOOGLE_ACCESS_TOKEN: ${{ steps.gauth.outputs.access_token }}
-          GOOGLE_PROJECT_ID: ${{ steps.gauth.outputs.project_id }}
       - name: Encode MP3
         run: |
           command -v ffmpeg || (sudo apt-get update -q && sudo apt-get install -yq ffmpeg)
@@ -30,5 +26,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          rm -f gha-creds-*.json
           git add samples/voices-gemini
           git commit -m "Add Chirp 3 HD voice samples [skip ci]" && git push || echo "nothing to commit"
