@@ -3,8 +3,13 @@
 // Reads the key from GOOGLE_TTS_API_KEY. Writes WAV; the workflow encodes MP3.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
+// Gemini voices need a service account token; Chirp works with the API key.
+const TOKEN = process.env.GOOGLE_ACCESS_TOKEN, PROJECT = process.env.GOOGLE_PROJECT_ID;
 const KEY = process.env.GOOGLE_TTS_API_KEY;
-if (!KEY) { console.error('GOOGLE_TTS_API_KEY is not set'); process.exit(1); }
+if (!TOKEN && !KEY) { console.error('No Google credentials set'); process.exit(1); }
+const AUTH = TOKEN
+  ? { Authorization: `Bearer ${TOKEN}`, ...(PROJECT ? { 'x-goog-user-project': PROJECT } : {}) }
+  : { 'X-Goog-Api-Key': KEY };
 
 // Gemini TTS: same Algenib voice, steered by a written direction.
 const TAKES = [['Algenib-Gemini', 'Algenib']];
@@ -49,7 +54,7 @@ mkdirSync(OUT, { recursive: true });
 let chars = 0;
 const call = (text, voice, model) => fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY },
+  headers: { 'Content-Type': 'application/json', ...AUTH },
   body: JSON.stringify({
     input: { prompt: PROMPT, text },
     voice: { languageCode: 'en-US', name: voice, modelName: model },
