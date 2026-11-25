@@ -10,7 +10,7 @@
  */
 
 export const LEGAL_DRAFT = false;
-export const LEGAL_UPDATED = "November 23, 2026";
+export const LEGAL_UPDATED = "November 25, 2026";
 /** Temporary until the app has its own address. */
 export const CONTACT_EMAIL = "cornerstoneandink@gmail.com";
 /** Who runs Omeora. */
@@ -63,7 +63,7 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "Ask AI",
     body: [
-      "When you ask a question, we send it, the verse you're asking about (if any) and the last few messages of that conversation to Anthropic, the company that makes the Claude AI model, so it can write an answer. When you ask for a hint in a study, we send the passage and what you've written on that step. Requests pass through our server, which doesn't keep a copy.",
+      "When you ask a question, we send it, the verse you're asking about (if any) and the last few messages of that conversation to Anthropic, the company that makes the Claude AI model, so it can write an answer. When you ask for a hint in a study, we send the passage and what you've written on that step. When you tap Reflect with AI, we send the passage and the answers you wrote for that study or plan day. Requests pass through our server, which doesn't keep a copy.",
       "Anthropic processes these requests under its commercial terms, which don't allow it to train its models on them. It may keep them for a limited time for safety and abuse monitoring. Please don't put private details about yourself or others in a question.",
     ],
   },
@@ -78,7 +78,7 @@ export const PRIVACY: LegalSection[] = [
     body: [
       "• Supabase stores accounts, synced study, test activity and feedback.",
       "• Cloudflare runs our Ask AI server. It sees your IP address, which we use only to slow down floods of requests.",
-      "• Anthropic writes Ask AI answers and study hints.",
+      "• Anthropic writes Ask AI answers, study hints and reflections.",
       "• GitHub hosts the Omeora website.",
       "• Apple and Google, only if you choose to sign in with them.",
       "Each of them handles data under its own privacy policy. We don't share your information with anyone else, and we never sell it.",

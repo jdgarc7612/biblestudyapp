@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { FormattedText } from "../../components/ai/formatted-text";
 import { ReadingText } from "../../components/plans/reading-text";
 import { PassagePicker } from "../../components/study/passage-picker";
+import { loadPassageText, ReflectBox } from "../../components/study/reflect-box";
 import { serifFont } from "../../constants/fonts";
 import { claimStudyBonus, getStudyHint } from "../../lib/ai-client";
 import { isLiveAiConfigured } from "../../lib/ai-config";
@@ -30,6 +31,7 @@ import {
   passageReference,
   resumeStep,
   SOAP_STEPS,
+  studyReflectAnswers,
   WHOLE_CHAPTER,
   type Passage,
   type SoapStep,
@@ -480,6 +482,7 @@ function Summary({
 }) {
   const router = useRouter();
   const deleteStudy = useAppStore((s) => s.deleteStudy);
+  const saveStudyReflection = useAppStore((s) => s.saveStudyReflection);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const finishedOn = entry.finishedAt
     ? new Date(entry.finishedAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
@@ -526,7 +529,24 @@ function Summary({
         ))}
       </View>
 
-      <View className="flex-row mt-8" style={{ gap: 8 }}>
+      <View className="mt-8">
+        <ReflectBox
+          kind="soap"
+          reference={entry.reference}
+          translation={entry.translation}
+          answers={studyReflectAnswers(entry)}
+          saved={entry.reflection}
+          used={entry.reflectionsUsed ?? 0}
+          getPassage={() =>
+            loadPassageText(entry.translation, [
+              { book: entry.book, chapter: entry.chapter, start: entry.start, end: entry.end },
+            ])
+          }
+          onSave={(r) => saveStudyReflection(id, r)}
+        />
+      </View>
+
+      <View className="flex-row mt-4" style={{ gap: 8 }}>
         <Pressable onPress={onDone} className="flex-1 items-center rounded-2xl py-3 active:opacity-80" style={{ backgroundColor: BLUE }}>
           <Text className="text-[15px] font-semibold text-white">Done</Text>
         </Pressable>

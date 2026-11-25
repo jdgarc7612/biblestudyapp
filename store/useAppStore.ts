@@ -31,6 +31,7 @@ import {
   setAnswerSaved,
   type AiAnswer,
 } from "../lib/ai-answers";
+import { REFLECTIONS_PER_ITEM, type PlanReflection, type Reflection } from "../lib/reflect";
 import storage from "../lib/storage";
 import {
   canFinish,
@@ -151,6 +152,8 @@ interface AppState {
   planProgress: Record<string, PlanProgress>;
   /** Keyed "planId/day/question" (day and question from 1), see lib/plans.ts. */
   planAnswers: Record<string, PlanAnswer>;
+  /** Reflect with AI on a plan day's answers, keyed "plan-id/day" (lib/reflect.ts). */
+  planReflections: Record<string, PlanReflection>;
 
   /** Study journal entries (lib/study-journal.ts), keyed "study-...". Private, synced. */
   studyEntries: Record<string, StudyEntry>;
@@ -240,6 +243,10 @@ interface AppState {
   leavePlan: () => void;
   /** Saves (or, with empty text, deletes) an answer to a reflection question. */
   savePlanAnswer: (id: string, text: string) => void;
+  /** Keeps a plan day's AI reflection and counts it. False when none are left. */
+  savePlanReflection: (id: string, reflection: Reflection) => boolean;
+  /** Keeps a study's AI reflection and counts it. False when none are left. */
+  saveStudyReflection: (id: string, reflection: Reflection) => boolean;
   /** Starts a new SOAP study of a passage and returns its id. */
   startStudy: (passage: Passage) => string;
   /** Saves writing in one step of a study. */
@@ -336,6 +343,7 @@ export const useAppStore = create<AppState>()(
       activePlanId: null,
       planProgress: {},
       planAnswers: {},
+      planReflections: {},
 
       studyEntries: {},
       aiStudyBonusDate: null,
@@ -558,6 +566,32 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
+
+      savePlanReflection: (id, reflection) => {
+        const existing = get().planReflections[id];
+        const used = existing?.used ?? 0;
+        if (used >= REFLECTIONS_PER_ITEM) return false;
+        set((state) => ({
+          planReflections: {
+            ...state.planReflections,
+            [id]: { ...reflection, used: used + 1, updatedAt: Date.now() },
+          },
+        }));
+        return true;
+      },
+
+      saveStudyReflection: (id, reflection) => {
+        const entry = get().studyEntries[id];
+        const used = entry?.reflectionsUsed ?? 0;
+        if (!entry || entry.deleted || used >= REFLECTIONS_PER_ITEM) return false;
+        set((state) => ({
+          studyEntries: {
+            ...state.studyEntries,
+            [id]: { ...entry, reflection, reflectionsUsed: used + 1, updatedAt: Date.now() },
+          },
+        }));
+        return true;
+      },
 
       startStudy: (passage) => {
         const id = makeStudyId();
