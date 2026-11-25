@@ -4,6 +4,7 @@
  * React, no Supabase) so they can be tested.
  */
 import type { TranslationId } from "./bible-types";
+import type { Reflection } from "./reflect";
 import { BOOKS, chapterTitle, formatReference, getBook } from "./bible";
 
 export type StudyMethod = "soap";
@@ -131,6 +132,9 @@ export interface StudyEntry {
   /** AI hints already shown, by step, so reopening a study never calls the AI again. */
   hints: Partial<Record<SoapStep, string>>;
   hintsUsed: number;
+  /** Reflect with AI on the finished study (lib/reflect.ts), and how many were asked for. */
+  reflection?: Reflection;
+  reflectionsUsed?: number;
   createdAt: number;
   updatedAt: number;
   finishedAt: number | null;
@@ -225,6 +229,7 @@ export function deletedStudy(entry: StudyEntry, now: number): StudyEntry {
     application: "",
     prayer: "",
     hints: {},
+    reflection: undefined,
     deleted: true,
     updatedAt: now,
   };
@@ -246,4 +251,9 @@ export function byStudyPassage(a: Passage, b: Passage) {
 /** Fixed hints for when the AI isn't available (offline build, or signed out). */
 export function offlineHint(step: SoapStep): string {
   return soapStep(step).tips.join("\n");
+}
+
+/** The study's writing, step by step, for Reflect with AI. */
+export function studyReflectAnswers(entry: Pick<StudyEntry, SoapStep>) {
+  return SOAP_STEPS.map((s) => ({ prompt: `${s.title}: ${s.prompt}`, text: entry[s.id] }));
 }

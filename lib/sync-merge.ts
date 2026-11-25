@@ -60,6 +60,7 @@ export const SYNCED_KEYS = [
   "savedVerses",
   "planProgress",
   "planAnswers",
+  "planReflections",
   "studyEntries",
   "aiStudyBonusDate",
   "aiAnswers",
@@ -147,6 +148,7 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
     if (!answers[id] || answer.updatedAt > answers[id].updatedAt) answers[id] = answer;
   }
   merged.planAnswers = answers;
+  merged.planReflections = mergeByUpdatedAt(local.planReflections, remote.planReflections);
   merged.studyEntries = mergeByUpdatedAt(local.studyEntries, remote.studyEntries);
   const bonusDates = [local.aiStudyBonusDate, remote.aiStudyBonusDate].filter((d): d is string => !!d).sort();
   merged.aiStudyBonusDate = bonusDates[bonusDates.length - 1] ?? null;

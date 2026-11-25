@@ -32,6 +32,7 @@ export const ACTIVITY_EVENTS = {
   study_start: "Started a SOAP study",
   study_hint: "Asked for a study hint",
   study_finish: "Finished a SOAP study",
+  reflect: "Asked for an AI reflection",
   translation: "Changed translation",
   feedback_sent: "Sent feedback",
 } as const;

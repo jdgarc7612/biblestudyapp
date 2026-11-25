@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PlanProgressBar } from "../../../../components/plans/progress-bar";
 import { ReadingText } from "../../../../components/plans/reading-text";
+import { loadPassageText, ReflectBox } from "../../../../components/study/reflect-box";
 import { serifFont } from "../../../../constants/fonts";
 import { localDateString } from "../../../../lib/date";
 import {
@@ -15,8 +16,10 @@ import {
   nextDay,
   planAnswerId,
   readingsLabel,
+  type PlanDay,
   STUDY_PLANS,
 } from "../../../../lib/plans";
+import { planReflectionId } from "../../../../lib/reflect";
 import { useAppStore } from "../../../../store/useAppStore";
 
 const BLUE = "#4A6FA5";
@@ -237,6 +240,8 @@ export default function PlanScreen() {
                       ))}
                     </View>
 
+                    <DayReflect planId={plan.id} day={n} dayInfo={day} label={label} />
+
                     {doneOn ? (
                       <View className="flex-row items-center justify-between">
                         <Text className="text-sm text-gray-500 dark:text-gray-400">
@@ -306,6 +311,31 @@ function AnswerBox({ id }: { id: string }) {
       />
       <Ionicons name="lock-closed-outline" size={13} color="#9CA3AF" style={{ marginTop: 14, marginLeft: 6 }} />
     </View>
+  );
+}
+
+/** Reflect with AI on the day's answers, once they've written something. */
+function DayReflect({ planId, day, dayInfo, label }: { planId: string; day: number; dayInfo: PlanDay; label: string }) {
+  const translation = useAppStore((s) => s.translation);
+  const planAnswers = useAppStore((s) => s.planAnswers);
+  const id = planReflectionId(planId, day);
+  const saved = useAppStore((s) => s.planReflections[id]);
+  const savePlanReflection = useAppStore((s) => s.savePlanReflection);
+  const answers = dayInfo.questions.map((q, qi) => ({
+    prompt: q,
+    text: planAnswers[planAnswerId(planId, day, qi + 1)]?.text ?? "",
+  }));
+  return (
+    <ReflectBox
+      kind="plan"
+      reference={label}
+      translation={translation}
+      answers={answers}
+      saved={saved}
+      used={saved?.used ?? 0}
+      getPassage={() => loadPassageText(translation, dayInfo.readings)}
+      onSave={(r) => savePlanReflection(id, r)}
+    />
   );
 }
 

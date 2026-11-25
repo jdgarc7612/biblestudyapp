@@ -13,12 +13,19 @@
  *   study gets (lib/study-journal.ts).
  *   -> 200 { hint }
  *
+ * POST /reflect { kind: "plan" | "soap", passage: { reference, text }, translation?, answers: [{ prompt, text }] }
+ *   Reflect with AI: one short, Scripture-first response to what the reader wrote. Same sign-in
+ *   rule as /hint, and never counted toward the daily questions; the app allows 2 per study or
+ *   plan day (lib/reflect.ts).
+ *   -> 200 { reflection }
+ *
  * The Anthropic API key lives only here, as the ANTHROPIC_API_KEY secret.
  */
 import Anthropic from "@anthropic-ai/sdk";
 
-import { AccountQuota, accountDay, inviteGateOn, makeAccountQuota } from "./quota";
-import { HINT_PROMPT, SYSTEM_PROMPT } from "./prompt";
+import { type AccountQuota, accountDay, inviteGateOn, makeAccountQuota } from "./quota";
+import { HINT_PROMPT, REFLECT_PROMPT, SYSTEM_PROMPT } from "./prompt";
+import { BadRequest, buildReflectMessage, validateReflect, type ValidReflect } from "./reflect";
 
 export interface Env {
   ANTHROPIC_API_KEY: string;
@@ -56,7 +63,6 @@ export interface ValidAsk {
   history: { role: "user" | "assistant"; content: string }[];
 }
 
-class BadRequest extends Error {}
 
 const HINT_STEPS = new Set(["scripture", "observation", "application", "prayer"]);
 const MAX_DRAFT_CHARS = 1500;
@@ -104,6 +110,7 @@ export function buildHintMessage(hint: ValidHint): string {
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
 
 export function validateAsk(body: AskBody): ValidAsk {
   const question = str(body.question);
@@ -190,7 +197,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/") {
       return json({ ok: true, service: "deepword-ai" }, 200, cors);
     }
-    if (request.method !== "POST" || (url.pathname !== "/ask" && url.pathname !== "/hint")) {
+    if (request.method !== "POST" || !["/ask", "/hint", "/reflect"].includes(url.pathname)) {
       return json({ error: "Not found." }, 404, cors);
     }
     // Browsers must come from an allowed site. (The phone apps send no Origin header.)
@@ -210,6 +217,7 @@ export default {
     }
 
     if (url.pathname === "/hint") return handleHint(request, env, cors);
+    if (url.pathname === "/reflect") return handleReflect(request, env, cors);
 
     let ask: ValidAsk;
     try {
@@ -315,19 +323,8 @@ async function handleHint(request: Request, env: Env, cors: Record<string, strin
     return json({ error: message }, 400, cors);
   }
 
-  // Hints are for signed-in readers (and, while the test is invite-only, invited ones).
-  if (env.SUPABASE_URL && env.SUPABASE_KEY) {
-    const token = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-    if (!token) return json({ error: "Please sign in to get hints.", code: "signed_out" }, 401, cors);
-    const check = await makeAccountQuota(
-      env.SUPABASE_URL,
-      env.SUPABASE_KEY,
-      token,
-      accountDay(request.headers.get("X-Timezone"))
-    ).used();
-    if (check === "signed_out") return json({ error: "Please sign in again to get hints.", code: "signed_out" }, 401, cors);
-    if (check === "unavailable") return json({ error: "Something went wrong. Please try again." }, 503, cors);
-  }
+  const notReader = await requireReader(request, env, cors, "get hints");
+  if (notReader) return notReader;
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2, timeout: 30_000 });
   try {
@@ -353,4 +350,71 @@ async function handleHint(request: Request, env: Env, cors: Record<string, strin
     console.error("Hint error", err instanceof Anthropic.APIError ? err.status : err);
     return json({ error: "Something went wrong. Please try again." }, 502, cors);
   }
+}
+
+/**
+ * Hints and reflections are for signed-in readers (and, while the test is invite-only, invited
+ * ones). Returns a response to send back when the reader can't go on, or null when they can.
+ */
+async function requireReader(
+  request: Request,
+  env: Env,
+  cors: Record<string, string>,
+  what: string
+): Promise<Response | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_KEY) return null;
+  const token = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return json({ error: `Please sign in to ${what}.`, code: "signed_out" }, 401, cors);
+  const check = await makeAccountQuota(
+    env.SUPABASE_URL,
+    env.SUPABASE_KEY,
+    token,
+    accountDay(request.headers.get("X-Timezone"))
+  ).used();
+  if (check === "signed_out") return json({ error: `Please sign in again to ${what}.`, code: "signed_out" }, 401, cors);
+  if (check === "unavailable") return json({ error: "Something went wrong. Please try again." }, 503, cors);
+  return null;
+}
+
+/** Reflect with AI on what the reader wrote. Never counted toward the daily questions. */
+async function handleReflect(request: Request, env: Env, cors: Record<string, string>): Promise<Response> {
+  let reflect: ValidReflect;
+  try {
+    reflect = validateReflect((await request.json()) as Parameters<typeof validateReflect>[0]);
+  } catch (err) {
+    const message = err instanceof BadRequest ? err.message : "That request couldn't be read.";
+    return json({ error: message }, 400, cors);
+  }
+  const notReader = await requireReader(request, env, cors, "reflect with AI");
+  if (notReader) return notReader;
+
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2, timeout: 45_000 });
+  try {
+    const response = await client.messages.create(reflectRequest(reflect, env.MODEL || DEFAULT_MODEL));
+    const text = response.content
+      .flatMap((block) => (block.type === "text" ? [block.text] : []))
+      .join("\n\n")
+      .trim();
+    if (response.stop_reason === "refusal" || !text) {
+      return json({ error: "No reflection came back. Please try again." }, 502, cors);
+    }
+    return json({ reflection: text }, 200, cors);
+  } catch (err) {
+    if (err instanceof Anthropic.RateLimitError) {
+      return json({ error: "The study companion is busy right now. Please try again shortly." }, 429, cors);
+    }
+    console.error("Reflect error", err instanceof Anthropic.APIError ? err.status : err);
+    return json({ error: "Something went wrong. Please try again." }, 502, cors);
+  }
+}
+
+/** The Claude request for a reflection (shared with scripts/test-reflect.mjs). */
+export function reflectRequest(reflect: ValidReflect, model: string): Anthropic.MessageCreateParamsNonStreaming {
+  return {
+    model,
+    max_tokens: 1200,
+    output_config: { effort: "low" },
+    system: [{ type: "text", text: REFLECT_PROMPT, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: buildReflectMessage(reflect) }],
+  };
 }

@@ -151,6 +151,67 @@ export async function getStudyHint(req: HintRequest): Promise<HintResult> {
   }
 }
 
+export interface ReflectRequest {
+  kind: "plan" | "soap";
+  reference: string;
+  /** The passage, verse numbers included. */
+  text: string;
+  translation: TranslationId;
+  answers: { prompt: string; text: string }[];
+}
+
+export type ReflectResult =
+  | { ok: true; reflection: string; live: boolean }
+  | { ok: false; message: string; signedOut?: boolean };
+
+/**
+ * Reflect with AI: one short response to what the reader wrote. Sends their writing to the AI,
+ * so the app calls this only when they tap. Never counts toward the daily questions.
+ */
+export async function getReflection(req: ReflectRequest): Promise<ReflectResult> {
+  if (!isLiveAiConfigured) {
+    await new Promise((r) => setTimeout(r, 700));
+    return {
+      ok: true,
+      live: false,
+      reflection: `This is a sample reflection, because live AI isn't set up in this build. With it on, you'd get a short response to what you wrote about ${req.reference}, starting from the passage itself and citing the verses behind each point.`,
+    };
+  }
+  const headers = await accountHeaders();
+  if (!headers.Authorization) return { ok: false, message: "Sign in to reflect with AI.", signedOut: true };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const res = await fetch(`${AI_ENDPOINT}/reflect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({
+        kind: req.kind,
+        passage: { reference: req.reference, text: req.text },
+        translation: req.translation,
+        answers: req.answers.filter((a) => a.text.trim()),
+      }),
+      signal: controller.signal,
+    });
+    const data = (await res.json().catch(() => ({}))) as { reflection?: string; error?: string; code?: string };
+    if (res.ok && data.reflection) return { ok: true, reflection: data.reflection, live: true };
+    return {
+      ok: false,
+      message: data.error ?? "I couldn't reflect on this just now. Please try again.",
+      signedOut: data.code === "signed_out",
+    };
+  } catch {
+    return {
+      ok: false,
+      message: controller.signal.aborted
+        ? "That took too long. Please try again."
+        : "I couldn't reach the study companion. Check your connection and try again.",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Tells the account that a study was finished today, which adds one Ask AI question for the day
  * (supabase/study-bonus.sql). Safe to call more than once a day. Guests keep the bonus on the device.
