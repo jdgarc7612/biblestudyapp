@@ -1,4 +1,4 @@
-// Records Psalm 23 and John 1:1-14 (BSB) in Google Chirp 3 HD, one verse per
+// Records Psalm 23 and John 1:1-14 (BSB) with Google TTS, one verse per
 // request (as the full Bible would be), uncompressed, joined with short pauses.
 // Reads the key from GOOGLE_TTS_API_KEY. Writes WAV; the workflow encodes MP3.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -6,12 +6,12 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const KEY = process.env.GOOGLE_TTS_API_KEY;
 if (!KEY) { console.error('GOOGLE_TTS_API_KEY is not set'); process.exit(1); }
 
-// file label, Chirp 3 HD voice, speaking rate
-const TAKES = [
-  ['Algenib-HQ', 'Algenib', 1.0],
-  ['Algenib-HQ-slower', 'Algenib', 0.88],
-];
-const OUT = 'samples/voices-hq';
+// Gemini TTS: same Algenib voice, steered by a written direction.
+const TAKES = [['Algenib-Gemini', 'Algenib']];
+const PROMPT = 'Read this aloud as Holy Scripture: reverent, warm and sincere, at a natural, unhurried pace, like a seasoned narrator of an audio Bible. Not slow.';
+// First model name the API accepts wins (newest first).
+const MODELS = ['gemini-3.8-flash-tts-preview', 'gemini-3.8-flash-tts', 'gemini-2.5-flash-tts'];
+const OUT = 'samples/voices-gemini';
 const RATE = 24000; // Chirp 3 HD native sample rate
 const VERSE_GAP = 0.75, SECTION_GAP = 1.6; // seconds
 
@@ -47,19 +47,35 @@ function wavFile(data) {
 
 mkdirSync(OUT, { recursive: true });
 let chars = 0;
-for (const [label, voice, rate] of TAKES) {
+const call = (text, voice, model) => fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY },
+  body: JSON.stringify({
+    input: { prompt: PROMPT, text },
+    voice: { languageCode: 'en-US', name: voice, modelName: model },
+    audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: RATE },
+  }),
+});
+let model = null;
+for (const m of MODELS) {
+  const r = await call('In the beginning.', 'Algenib', m);
+  const b = await r.json().catch(() => ({}));
+  if (r.ok && b.audioContent) { model = m; break; }
+  console.error(`model ${m}: HTTP ${r.status} ${b.error?.status ?? ''} ${b.error?.message ?? ''}`);
+}
+if (!model) process.exit(1);
+console.log(`using model ${model}`);
+
+for (const [label, voice] of TAKES) {
   const parts = [silence(0.4)];
   for (const [text, gap] of lines) {
-    const res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY },
-      body: JSON.stringify({
-        input: { text },
-        voice: { languageCode: 'en-US', name: `en-US-Chirp3-HD-${voice}` },
-        audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: RATE, speakingRate: rate },
-      }),
-    });
-    const body = await res.json().catch(() => ({}));
+    let res, body;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await call(text, voice, model);
+      body = await res.json().catch(() => ({}));
+      if (res.ok && body.audioContent) break;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
     if (!res.ok || !body.audioContent) {
       console.error(`${label}: HTTP ${res.status} ${body.error?.status ?? ''} ${body.error?.message ?? ''}`);
       process.exit(1);
