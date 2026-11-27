@@ -107,9 +107,24 @@ export function hintsLeft(entry: Pick<StudyEntry, "hintsUsed">, unlimited = fals
 /** Extra Ask AI questions for finishing a study, at most once a day. */
 export const STUDY_BONUS_QUESTIONS = 1;
 
-/** Today's Ask AI question limit, counting the bonus if a study was finished today. */
-export function dailyQuestionLimit(base: number, bonusDate: string | null | undefined, today: string): number {
-  return base + (bonusDate === today ? STUDY_BONUS_QUESTIONS : 0);
+/** Extra Ask AI questions bought in the Rewards Shop, at most once a day. */
+export const SHOP_BONUS_QUESTIONS = 1;
+
+/**
+ * Today's Ask AI question limit, counting the bonus if a study was finished today and the extra
+ * question if one was bought in the Rewards Shop today.
+ */
+export function dailyQuestionLimit(
+  base: number,
+  bonusDate: string | null | undefined,
+  today: string,
+  shopDate?: string | null
+): number {
+  return (
+    base +
+    (bonusDate === today ? STUDY_BONUS_QUESTIONS : 0) +
+    (shopDate === today ? SHOP_BONUS_QUESTIONS : 0)
+  );
 }
 
 /**

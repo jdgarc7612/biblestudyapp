@@ -305,9 +305,14 @@ export default function HomeScreen() {
           dueCount={memoryDeck.filter((c) => isDue(c)).length}
           deckSize={memoryDeck.length}
           suggestion={focusText && !planDay ? { reference: focus.reference, text: focusText } : null}
-          onRead={(book, chapter) =>
-            router.push({ pathname: "/read/[book]/[chapter]", params: { book, chapter: String(chapter) } })
-          }
+          onRead={(book, chapter) => {
+            // Back to the verse you stopped on when it's the chapter you were reading.
+            const verse = lastRead?.book === book && lastRead.chapter === chapter ? lastRead.verse : undefined;
+            router.push({
+              pathname: "/read/[book]/[chapter]",
+              params: { book, chapter: String(chapter), ...(verse && verse > 1 ? { at: String(verse) } : {}) },
+            });
+          }}
           onRecap={(title) =>
             router.push({
               pathname: "/ai",

@@ -8,6 +8,7 @@ import { localDateString } from "../lib/date";
 import {
   DAILY_ROUTINE_TOKEN_CAP,
   DAILY_SESSION_TOKENS,
+  EXTRA_QUESTION_COST,
   ONBOARDING_BONUS,
   PERFECT_RECALL_BONUS,
   STREAK_FREEZE_COST,
@@ -33,6 +34,7 @@ import {
 } from "../lib/ai-answers";
 import { REFLECTIONS_PER_ITEM, type PlanReflection, type Reflection } from "../lib/reflect";
 import storage from "../lib/storage";
+import { clampTextSize, DEFAULT_TEXT_SIZE, getReadingTheme, type ReadingThemeId } from "../lib/reading-prefs";
 import {
   canFinish,
   dailyQuestionLimit,
@@ -112,6 +114,8 @@ export interface PlanAnswer {
 export interface ReadingLocation {
   book: string;
   chapter: number;
+  /** The verse near the top of the screen when reading stopped (an estimate). */
+  verse?: number;
 }
 
 interface AppState {
@@ -138,6 +142,12 @@ interface AppState {
   // Reading
   translation: TranslationId;
   lastRead: ReadingLocation | null;
+  /** Bible text size in Read (lib/reading-prefs.ts TEXT_SIZES index). This device only. */
+  readerTextSize: number;
+  /** The reading theme in use (lib/reading-prefs.ts). Synced. */
+  readingTheme: ReadingThemeId;
+  /** Reading themes bought in the Rewards Shop. Synced. */
+  ownedReadingThemes: ReadingThemeId[];
 
   // Study notes, keyed by verse range id ("john-3-16-17").
   verseNotes: Record<string, VerseNote>;
@@ -159,6 +169,8 @@ interface AppState {
   studyEntries: Record<string, StudyEntry>;
   /** Local date a study was last finished, which adds a bonus Ask AI question that day. */
   aiStudyBonusDate: string | null;
+  /** Local date an extra Ask AI question was bought in the Rewards Shop (one a day). */
+  aiShopBonusDate: string | null;
 
   // Read streak
   currentReadStreak: number;
@@ -225,6 +237,15 @@ interface AppState {
   setDisplayName: (name: string) => void;
   setTranslation: (translation: TranslationId) => void;
   setLastRead: (location: ReadingLocation) => void;
+  setReaderTextSize: (index: number) => void;
+  setReadingTheme: (id: ReadingThemeId) => void;
+  /** Buys a reading theme with tokens and starts using it. False if it can't be bought. */
+  purchaseReadingTheme: (id: ReadingThemeId) => boolean;
+  /**
+   * Records today's extra Ask AI question. With `charge`, spends the tokens (false if there aren't
+   * enough); without, only marks the day (it was already bought on another device).
+   */
+  markExtraQuestionBought: (charge: boolean) => boolean;
   /** Saves (or, with empty text, deletes) the note on a verse range. */
   saveVerseNote: (id: string, reference: string, text: string) => void;
   setLastStudy: (location: StudyLocation) => void;
@@ -314,6 +335,9 @@ export const useAppStore = create<AppState>()(
 
       translation: DEFAULT_TRANSLATION,
       lastRead: null,
+      readerTextSize: DEFAULT_TEXT_SIZE,
+      readingTheme: "default",
+      ownedReadingThemes: [],
 
       currentReadStreak: 0,
       longestReadStreak: 0,
@@ -347,6 +371,7 @@ export const useAppStore = create<AppState>()(
 
       studyEntries: {},
       aiStudyBonusDate: null,
+      aiShopBonusDate: null,
 
       deletedCardIds: [],
       syncedUserId: null,
@@ -508,6 +533,29 @@ export const useAppStore = create<AppState>()(
       },
 
       setLastRead: (location) => set({ lastRead: location }),
+      setReaderTextSize: (index) => set({ readerTextSize: clampTextSize(index) }),
+      setReadingTheme: (id) => {
+        const theme = getReadingTheme(id);
+        if (theme.cost > 0 && !get().ownedReadingThemes.includes(theme.id)) return;
+        set({ readingTheme: theme.id });
+      },
+      purchaseReadingTheme: (id) => {
+        const theme = getReadingTheme(id);
+        const state = get();
+        if (theme.cost === 0 || state.ownedReadingThemes.includes(theme.id)) return false;
+        if (!state.spendTokens(theme.cost)) return false;
+        track("shop_theme", theme.id);
+        set((s) => ({ ownedReadingThemes: [...s.ownedReadingThemes, theme.id], readingTheme: theme.id }));
+        return true;
+      },
+      markExtraQuestionBought: (charge) => {
+        const today = localDateString();
+        if (get().aiShopBonusDate === today) return false;
+        if (charge && !get().spendTokens(EXTRA_QUESTION_COST)) return false;
+        if (charge) track("shop_question", today);
+        set({ aiShopBonusDate: today });
+        return true;
+      },
 
       setLastStudy: (location) => set({ lastStudy: location }),
 
@@ -767,7 +815,7 @@ export const useAppStore = create<AppState>()(
           state.aiFreeQuestionsAskedTodayDate === localDateString()
             ? state.aiFreeQuestionsAskedToday
             : 0;
-        return Math.max(0, dailyQuestionLimit(AI_DAILY_QUESTION_LIMIT, state.aiStudyBonusDate, localDateString()) - askedToday);
+        return Math.max(0, dailyQuestionLimit(AI_DAILY_QUESTION_LIMIT, state.aiStudyBonusDate, localDateString(), state.aiShopBonusDate) - askedToday);
       },
 
       recordAiQuestionAsked: () => {

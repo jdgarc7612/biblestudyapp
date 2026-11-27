@@ -1,5 +1,5 @@
-import { Link } from "expo-router";
-import { useState } from "react";
+import { Link, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { LayoutAnimation, Platform, Pressable, ScrollView, Text, UIManager, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,6 +9,7 @@ import { ChapterGrid } from "../../../components/read/chapter-grid";
 import { TranslationPill } from "../../../components/read/translation-picker";
 import { serifFont } from "../../../constants/fonts";
 import { BOOKS, chapterTitle, getBook, getTranslation } from "../../../lib/bible";
+import { shouldResumeReading } from "../../../lib/reading-prefs";
 import { useAppStore } from "../../../store/useAppStore";
 import { BackButton } from "../../../components/back-button";
 
@@ -18,10 +19,31 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 
 type Testament = "OT" | "NT";
 
+/** Params for a chapter at the verse you stopped on (scrolled to, not selected). */
+function resumeParams(location: { book: string; chapter: number; verse?: number }) {
+  return {
+    book: location.book,
+    chapter: String(location.chapter),
+    ...(location.verse && location.verse > 1 ? { at: String(location.verse) } : {}),
+  };
+}
+
 export default function ReadScreen() {
   const translation = useAppStore((state) => state.translation);
   const lastRead = useAppStore((state) => state.lastRead);
   const lastBook = getBook(lastRead?.book);
+  const router = useRouter();
+
+  useEffect(() => {
+    // The first time Read opens in a visit, go straight back to the chapter and verse you were on.
+    // The book list is one back tap away (lib/reading-prefs.ts).
+    if (!shouldResumeReading()) return;
+    const location = useAppStore.getState().lastRead;
+    if (!location || !getBook(location.book)) return;
+    router.push({ pathname: "/read/[book]/[chapter]", params: resumeParams(location) });
+    // Once, when the tab first opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [testament, setTestament] = useState<Testament>(lastBook?.testament ?? "NT");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -60,7 +82,7 @@ export default function ReadScreen() {
           <Link
             href={{
               pathname: "/read/[book]/[chapter]",
-              params: { book: lastBook.id, chapter: String(lastRead.chapter) },
+              params: resumeParams(lastRead),
             }}
             asChild
           >

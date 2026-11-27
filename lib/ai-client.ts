@@ -227,3 +227,27 @@ export async function claimStudyBonus(day: string): Promise<void> {
     // The day's bonus still shows on this device; the account just won't count it.
   }
 }
+
+export type ShopQuestionResult = "ok" | "already" | "signed_out" | "unavailable" | "error";
+
+/**
+ * Asks the account for today's extra Ask AI question from the Rewards Shop
+ * (supabase/shop-question.sql). The account allows one a day, so the limit holds on every device.
+ * Tokens are only spent after this says "ok".
+ */
+export async function claimShopQuestion(day: string): Promise<ShopQuestionResult> {
+  const supabase = getSupabase();
+  if (!supabase) return "signed_out";
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return "signed_out";
+  try {
+    const { data: granted, error } = await supabase.rpc("claim_shop_question", { p_day: day });
+    if (error) {
+      // PGRST202: the function isn't in the database yet.
+      return error.code === "PGRST202" || error.code === "42883" ? "unavailable" : "error";
+    }
+    return granted === true ? "ok" : "already";
+  } catch {
+    return "error";
+  }
+}

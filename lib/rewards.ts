@@ -7,6 +7,8 @@ export const PERFECT_RECALL_BONUS = 5;
 export const ONBOARDING_BONUS = 10;
 export const REFERRAL_BONUS = 25;
 export const STREAK_FREEZE_COST = 25;
+/** One extra Ask AI question for the day, at most one a day (the account enforces it). */
+export const EXTRA_QUESTION_COST = 50;
 export const DAILY_ROUTINE_TOKEN_CAP = 20;
 
 export const STREAK_MILESTONES: Record<number, number> = {

@@ -40,6 +40,7 @@ const SCALAR_KEYS = [
   "displayName",
   "translation",
   "lastRead",
+  "readingTheme",
   "lastStudy",
   "activePlanId",
   "tokensEarnedToday",
@@ -63,6 +64,8 @@ export const SYNCED_KEYS = [
   "planReflections",
   "studyEntries",
   "aiStudyBonusDate",
+  "aiShopBonusDate",
+  "ownedReadingThemes",
   "aiAnswers",
   "currentReadStreak",
   "longestReadStreak",
@@ -96,6 +99,7 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
   const merged = { ...newer } as SyncData;
   for (const key of SCALAR_KEYS) (merged as Record<string, unknown>)[key] = newer[key];
   merged.memoryMethod = newer.memoryMethod ?? local.memoryMethod ?? "smart";
+  merged.readingTheme = newer.readingTheme ?? local.readingTheme ?? "default";
 
   const deleted = union(local.deletedCardIds, remote.deletedCardIds).slice(-500);
   const cards = new Map<string, MemoryCard>();
@@ -152,6 +156,10 @@ export function mergeSyncData(local: SyncData, remote: SyncData, accountFirst: b
   merged.studyEntries = mergeByUpdatedAt(local.studyEntries, remote.studyEntries);
   const bonusDates = [local.aiStudyBonusDate, remote.aiStudyBonusDate].filter((d): d is string => !!d).sort();
   merged.aiStudyBonusDate = bonusDates[bonusDates.length - 1] ?? null;
+  const shopDates = [local.aiShopBonusDate, remote.aiShopBonusDate].filter((d): d is string => !!d).sort();
+  merged.aiShopBonusDate = shopDates[shopDates.length - 1] ?? null;
+  // Bought themes are never lost: keep every theme either copy owns.
+  merged.ownedReadingThemes = [...new Set([...(remote.ownedReadingThemes ?? []), ...(local.ownedReadingThemes ?? [])])];
   merged.aiAnswers = mergeAnswers(local.aiAnswers, remote.aiAnswers);
 
   const read = streakWinner(local, remote, "lastReadDate", "currentReadStreak");
