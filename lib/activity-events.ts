@@ -35,6 +35,8 @@ export const ACTIVITY_EVENTS = {
   reflect: "Asked for an AI reflection",
   translation: "Changed translation",
   feedback_sent: "Sent feedback",
+  shop_question: "Bought an extra Ask AI question",
+  shop_theme: "Bought a reading theme",
 } as const;
 
 export type ActivityEvent = keyof typeof ACTIVITY_EVENTS;

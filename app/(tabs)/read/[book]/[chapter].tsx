@@ -2,6 +2,7 @@ import { Link, Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   GestureResponderEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -51,6 +52,16 @@ import {
 } from "../../../../lib/verse-marks";
 import { useAppStore } from "../../../../store/useAppStore";
 import { BackButton } from "../../../../components/back-button";
+import { ReadingSettingsSheet } from "../../../../components/read/reading-settings";
+import { useColorScheme } from "../../../../hooks/use-color-scheme";
+import {
+  markReadingResumed,
+  readingThemeColors,
+  scrollForVerse,
+  swipeDirection,
+  TEXT_SIZES,
+  verseAtScroll,
+} from "../../../../lib/reading-prefs";
 
 const READ_ENGAGEMENT_SECONDS = 20;
 const BLUE = "#4A6FA5";
@@ -65,6 +76,15 @@ export async function generateStaticParams(): Promise<{ book: string; chapter: s
   );
 }
 
+// Native animations where they exist; the web runs them in JS.
+const NATIVE_DRIVER = Platform.OS !== "web";
+
+/**
+ * Which way the last chapter change went, so the next chapter slides in from that side. Set just
+ * before paging and read once by the chapter that opens.
+ */
+let pagedFrom: "next" | "prev" | null = null;
+
 /** The chapter before/after this one, crossing into the neighbouring book when needed. */
 function neighbour(bookId: string, chapter: number, step: 1 | -1) {
   const index = BOOKS.findIndex((b) => b.id === bookId);
@@ -78,7 +98,7 @@ function neighbour(bookId: string, chapter: number, step: 1 | -1) {
 }
 
 export default function ChapterScreen() {
-  const { book: bookParam, chapter, v, e, study, w } = useLocalSearchParams<{
+  const { book: bookParam, chapter, v, e, study, w, at } = useLocalSearchParams<{
     book: string;
     chapter: string;
     /** Verse (and optional end verse) to select when the chapter opens. */
@@ -88,6 +108,8 @@ export default function ChapterScreen() {
     study?: string;
     /** With study=words: the Strong's number of the word to open on. */
     w?: string;
+    /** Verse to scroll to without selecting it (picking up where you left off). */
+    at?: string;
   }>();
   const book = getBook(bookParam);
   const chapterNum = Number(chapter);
@@ -102,13 +124,14 @@ export default function ChapterScreen() {
       : null;
   return (
     <ChapterReader
-      key={`${book.id}-${chapterNum}-${v ?? ""}-${e ?? ""}`}
+      key={`${book.id}-${chapterNum}-${v ?? ""}-${e ?? ""}-${at ?? ""}`}
       bookId={book.id}
       chapterNum={chapterNum}
       initialSelection={initial}
       openStudy={!!study && !!initial}
       studyTab={study === "book" ? "book" : study === "note" ? "note" : study === "1" ? "connections" : "words"}
       initialWord={Number(w) > 0 ? Number(w) : undefined}
+      resumeVerse={Number.isInteger(Number(at)) && Number(at) > 1 ? Number(at) : undefined}
     />
   );
 }
@@ -120,6 +143,7 @@ function ChapterReader({
   openStudy,
   studyTab: routeTab,
   initialWord: routeWord,
+  resumeVerse,
 }: {
   bookId: string;
   chapterNum: number;
@@ -127,8 +151,16 @@ function ChapterReader({
   openStudy: boolean;
   studyTab: StudyTab;
   initialWord?: number;
+  resumeVerse?: number;
 }) {
   const router = useRouter();
+  const dark = useColorScheme() === "dark";
+  const readerTextSize = useAppStore((state) => state.readerTextSize);
+  const readingTheme = useAppStore((state) => state.readingTheme);
+  const ownedReadingThemes = useAppStore((state) => state.ownedReadingThemes);
+  const themeColors = readingThemeColors(readingTheme, ownedReadingThemes, dark);
+  const textSize = TEXT_SIZES[readerTextSize] ?? TEXT_SIZES[2];
+  const [readingOpen, setReadingOpen] = useState(false);
   const book = getBook(bookId)!;
   const translation = useAppStore((state) => state.translation);
   const setLastRead = useAppStore((state) => state.setLastRead);
@@ -152,8 +184,17 @@ function ChapterReader({
   const deepDiveAvailable = !!contextNote && hasDeepDive(bookId, chapterNum);
   const [deepDiveOpen, setDeepDiveOpen] = useState(false);
 
+  // Where to pick up next time: this chapter, and (once scrolling settles) the verse at the top.
+  const lastVerseRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    setLastRead({ book: bookId, chapter: chapterNum });
+    markReadingResumed();
+    const prev = useAppStore.getState().lastRead;
+    const sameChapter = prev?.book === bookId && prev.chapter === chapterNum;
+    const verse = initialSelection?.anchor ?? resumeVerse ?? (sameChapter ? prev?.verse : undefined);
+    lastVerseRef.current = verse;
+    setLastRead(verse && verse > 1 ? { book: bookId, chapter: chapterNum, verse } : { book: bookId, chapter: chapterNum });
+    // Only when the chapter opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId, chapterNum, setLastRead]);
 
   const memoryDeck = useAppStore((state) => state.memoryDeck);
@@ -174,8 +215,30 @@ function ChapterReader({
     return () => clearTimeout(timer);
   }, [chapterNum, logReadEngagement]);
 
+  const verseSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (verseSaveTimer.current) clearTimeout(verseSaveTimer.current);
+  }, []);
+  const rememberVerse = () => {
+    if (verseSaveTimer.current) clearTimeout(verseSaveTimer.current);
+    verseSaveTimer.current = setTimeout(() => {
+      const verses = chapterVersesRef.current;
+      if (!textHeightRef.current || verses.length === 0) return;
+      const verse = verseAtScroll(
+        scrollYRef.current,
+        textTopRef.current,
+        textHeightRef.current,
+        verses[verses.length - 1].verse
+      );
+      if (verse === lastVerseRef.current) return;
+      lastVerseRef.current = verse;
+      setLastRead(verse > 1 ? { book: bookId, chapter: chapterNum, verse } : { book: bookId, chapter: chapterNum });
+    }, 1200);
+  };
+
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollYRef.current = e.nativeEvent.contentOffset.y;
+    rememberVerse();
     if (engagementLoggedRef.current) return;
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 40) {
@@ -240,17 +303,44 @@ function ChapterReader({
 
   // Bring a linked verse into view. Verses flow as one paragraph, so this estimates its position
   // from how far through the chapter it is, then leaves a little room above it.
+  // Picking up where you left off scrolls the same way, without selecting the verse.
   const scrollRef = useRef<ScrollView>(null);
   const textTopRef = useRef(0);
+  const textHeightRef = useRef(0);
+  const chapterVersesRef = useRef(chapterData.verses);
+  chapterVersesRef.current = chapterData.verses;
   const scrolledRef = useRef(false);
-  const scrollToInitialVerse = (textHeight: number) => {
-    if (scrolledRef.current || !initialSelection || chapterData.verses.length === 0) return;
-    scrolledRef.current = true;
+  // Set when the text size changes, so the same verse stays at the top after the text reflows.
+  const keepVerseRef = useRef<number | null>(null);
+  const handleTextLayout = (textHeight: number) => {
+    textHeightRef.current = textHeight;
+    if (chapterData.verses.length === 0) return;
     const lastVerse = chapterData.verses[chapterData.verses.length - 1].verse;
-    const fraction = (initialSelection.anchor - 1) / Math.max(1, lastVerse);
-    const y = textTopRef.current + textHeight * fraction - 140;
-    if (y > 80) setTimeout(() => scrollRef.current?.scrollTo({ y, animated: true }), 50);
+    if (keepVerseRef.current !== null) {
+      const y = scrollForVerse(keepVerseRef.current, textTopRef.current, textHeight, lastVerse);
+      keepVerseRef.current = null;
+      setTimeout(() => scrollRef.current?.scrollTo({ y, animated: false }), 0);
+      return;
+    }
+    const target = initialSelection?.anchor ?? resumeVerse;
+    if (scrolledRef.current || !target) return;
+    scrolledRef.current = true;
+    const y = scrollForVerse(target, textTopRef.current, textHeight, lastVerse);
+    if (y > 80) setTimeout(() => scrollRef.current?.scrollTo({ y, animated: !resumeVerse || !!initialSelection }), 50);
   };
+  const prevTextSize = useRef(readerTextSize);
+  if (prevTextSize.current !== readerTextSize) {
+    prevTextSize.current = readerTextSize;
+    const verses = chapterData.verses;
+    if (textHeightRef.current && verses.length > 0 && scrollYRef.current > 40) {
+      keepVerseRef.current = verseAtScroll(
+        scrollYRef.current,
+        textTopRef.current,
+        textHeightRef.current,
+        verses[verses.length - 1].verse
+      );
+    }
+  }
 
   // Highlights and Saved (lib/verse-marks.ts). `savedRanges` below is the Memory deck, not Saved.
   const verseHighlights = useAppStore((state) => state.verseHighlights);
@@ -328,6 +418,73 @@ function ChapterReader({
 
   const prev = neighbour(bookId, chapterNum, -1);
   const next = neighbour(bookId, chapterNum, 1);
+
+  // Swipe left for the next chapter, right for the previous one. The page follows the finger a
+  // little, then the new chapter slides in from that side. Paging replaces this screen, so the
+  // back control still returns to wherever you came from (lib/nav-trail.ts).
+  const { width: windowWidth } = useWindowDimensions();
+  const enteringFrom = useRef(pagedFrom).current;
+  const slideX = useRef(new Animated.Value(enteringFrom === "next" ? 36 : enteringFrom === "prev" ? -36 : 0)).current;
+  const fade = useRef(new Animated.Value(enteringFrom ? 0 : 1)).current;
+  useEffect(() => {
+    pagedFrom = null;
+    if (!enteringFrom) return;
+    Animated.parallel([
+      Animated.timing(slideX, { toValue: 0, duration: 200, useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: NATIVE_DRIVER }),
+    ]).start();
+  }, [enteringFrom, slideX, fade]);
+
+  const goToChapter = (direction: "next" | "prev") => {
+    const target = direction === "next" ? next : prev;
+    if (!target) return;
+    pagedFrom = direction;
+    router.replace({
+      pathname: "/read/[book]/[chapter]",
+      params: { book: target.book.id, chapter: String(target.chapter) },
+    });
+  };
+  const swipeRef = useRef({ enabled: true, canNext: false, canPrev: false, width: 400, go: (_d: "next" | "prev") => {} });
+  swipeRef.current = {
+    enabled: !sheetOpen && !actionsOpen && !deepDiveOpen && !readingOpen,
+    canNext: !!next,
+    canPrev: !!prev,
+    width: windowWidth,
+    go: goToChapter,
+  };
+  const springBack = () => {
+    Animated.spring(slideX, { toValue: 0, useNativeDriver: NATIVE_DRIVER, bounciness: 4 }).start();
+    Animated.timing(fade, { toValue: 1, duration: 120, useNativeDriver: NATIVE_DRIVER }).start();
+  };
+  const swipeResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        swipeRef.current.enabled && Math.abs(g.dx) > 18 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderMove: (_, g) => {
+        const { canNext, canPrev } = swipeRef.current;
+        const open = g.dx < 0 ? canNext : canPrev;
+        slideX.setValue(g.dx * (open ? 0.45 : 0.12));
+        if (open) fade.setValue(1 - Math.min(0.35, Math.abs(g.dx) / 900));
+      },
+      onPanResponderRelease: (_, g) => {
+        const { canNext, canPrev, width, go } = swipeRef.current;
+        const direction = swipeDirection(g.dx, g.dy, g.vx);
+        if (!direction || (direction === "next" ? !canNext : !canPrev)) {
+          springBack();
+          return;
+        }
+        Animated.parallel([
+          Animated.timing(slideX, {
+            toValue: (direction === "next" ? -1 : 1) * Math.min(160, width * 0.3),
+            duration: 130,
+            useNativeDriver: NATIVE_DRIVER,
+          }),
+          Animated.timing(fade, { toValue: 0, duration: 130, useNativeDriver: NATIVE_DRIVER }),
+        ]).start(() => go(direction));
+      },
+      onPanResponderTerminate: springBack,
+    })
+  ).current;
 
   const handleVersePress = (verseNum: number, event?: GestureResponderEvent) => {
     const pageY = event?.nativeEvent?.pageY;
@@ -465,34 +622,58 @@ function ChapterReader({
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
-      <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
+    <SafeAreaView
+      className="flex-1 bg-white dark:bg-gray-900"
+      style={themeColors ? { backgroundColor: themeColors.background } : undefined}
+      edges={["top"]}
+    >
+      <View
+        className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800"
+        style={themeColors ? { borderBottomColor: `${themeColors.accent}33` } : undefined}
+      >
         <BackButton fallback="/read" className="p-1" />
         <View className="flex-row items-center" style={{ gap: 10 }}>
           <Link href={{ pathname: "/read/[book]", params: { book: bookId } }} asChild>
             <Pressable hitSlop={8} accessibilityLabel={`${chapterTitle(book.name, chapterNum)}. Choose a chapter`} className="active:opacity-60">
-              <Text className="text-base font-semibold text-gray-900 dark:text-white">
+              <Text
+                className="text-base font-semibold text-gray-900 dark:text-white"
+                style={themeColors ? { color: themeColors.text } : undefined}
+              >
                 {chapterTitle(book.name, chapterNum)}
               </Text>
             </Pressable>
           </Link>
           <TranslationPill compact />
         </View>
-        <Pressable
-          onPress={handleMarkAsRead}
-          hitSlop={8}
-          className="p-1 active:opacity-60"
-          accessibilityLabel={readToday ? "Marked as read today" : "Mark as Read"}
-        >
-          <Ionicons
-            name={readToday ? "checkmark-circle" : "checkmark-circle-outline"}
-            size={22}
-            color={readToday ? "#16A34A" : "#9CA3AF"}
-          />
-        </Pressable>
+        <View className="flex-row items-center" style={{ gap: 6 }}>
+          <Pressable
+            onPress={() => setReadingOpen(true)}
+            hitSlop={8}
+            className="p-1 active:opacity-60"
+            accessibilityRole="button"
+            accessibilityLabel="Text size and reading theme"
+          >
+            <Text style={{ fontFamily: serifFont, fontSize: 17, color: themeColors?.accent }} className={themeColors ? "" : "text-gray-500 dark:text-gray-400"}>
+              Aa
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={handleMarkAsRead}
+            hitSlop={8}
+            className="p-1 active:opacity-60"
+            accessibilityLabel={readToday ? "Marked as read today" : "Mark as Read"}
+          >
+            <Ionicons
+              name={readToday ? "checkmark-circle" : "checkmark-circle-outline"}
+              size={22}
+              color={readToday ? "#16A34A" : "#9CA3AF"}
+            />
+          </Pressable>
+        </View>
       </View>
 
-      <View ref={readerRef} className="flex-1" onLayout={keepSelectionInView}>
+      <View ref={readerRef} className="flex-1" onLayout={keepSelectionInView} {...swipeResponder.panHandlers}>
+      <Animated.View style={{ flex: 1, opacity: fade, transform: [{ translateX: slideX }] }}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }}
@@ -501,7 +682,7 @@ function ChapterReader({
         scrollEventThrottle={200}
       >
         <Text
-          style={{ fontFamily: serifFont }}
+          style={{ fontFamily: serifFont, ...(themeColors ? { color: themeColors.text } : null) }}
           className="text-3xl text-gray-900 dark:text-white mb-1"
         >
           {chapterTitle(book.name, chapterNum)}
@@ -555,7 +736,7 @@ function ChapterReader({
             </Pressable>
           </View>
         ) : (
-        <View onLayout={(ev) => scrollToInitialVerse(ev.nativeEvent.layout.height)}>
+        <View onLayout={(ev) => handleTextLayout(ev.nativeEvent.layout.height)}>
           {sections.map((section, si) => {
             const headings = si === 0 && headingsAboveTitle.length > 0 ? [] : section.headings;
             return (
@@ -564,8 +745,13 @@ function ChapterReader({
                   <SectionHeading key={`${h.verse}-${i}`} heading={h} tight={si === 0 || i > 0} />
                 ))}
         <Text
-          style={{ fontFamily: serifFont }}
-          className="text-lg leading-8 text-gray-900 dark:text-gray-100"
+          style={{
+            fontFamily: serifFont,
+            fontSize: textSize.fontSize,
+            lineHeight: textSize.lineHeight,
+            ...(themeColors ? { color: themeColors.text } : null),
+          }}
+          className="text-gray-900 dark:text-gray-100"
         >
           {section.verses.map((v) => {
             const noted = notedRanges.some((r) => r && v.verse === r.end);
@@ -590,7 +776,12 @@ function ChapterReader({
                         : undefined
                 }
               >
-                <Text className="text-xs font-bold text-brand-earth">{v.verse} </Text>
+                <Text
+                  className="font-bold text-brand-earth"
+                  style={{ fontSize: Math.round(textSize.fontSize * 0.67), ...(themeColors ? { color: themeColors.accent } : null) }}
+                >
+                  {v.verse}{" "}
+                </Text>
                 {v.text}
                 {highlight && inMemory && !inSelection ? (
                   <Text accessibilityLabel="In Memory" className="text-xs">
@@ -638,6 +829,7 @@ function ChapterReader({
           </Text>
         )}
       </ScrollView>
+      </Animated.View>
       {selection && actionsOpen ? (
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -651,7 +843,7 @@ function ChapterReader({
       {selection ? (
         <View
           className={`border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 ${actionsOpen ? "rounded-t-3xl" : ""}`}
-          style={[NO_SELECT, actionsOpen ? styles.sheetShadow : null]}
+          style={[NO_SELECT, actionsOpen ? styles.sheetShadow : null, themeColors ? { backgroundColor: themeColors.background } : null]}
         >
         <View {...dragResponder.panHandlers}>
           <Pressable
@@ -764,13 +956,8 @@ function ChapterReader({
         <View className="flex-row items-center justify-between px-5 py-4 border-t border-gray-100 dark:border-gray-800">
           <Pressable
             disabled={!prev}
-            onPress={() =>
-              prev &&
-              router.replace({
-                pathname: "/read/[book]/[chapter]",
-                params: { book: prev.book.id, chapter: String(prev.chapter) },
-              })
-            }
+            onPress={() => goToChapter("prev")}
+            accessibilityLabel={prev ? `Previous chapter, ${chapterTitle(prev.book.name, prev.chapter)}. Or swipe right.` : undefined}
             className="flex-row items-center px-4 py-2 rounded-xl active:opacity-60"
             style={{ opacity: prev ? 1 : 0.3 }}
           >
@@ -781,13 +968,8 @@ function ChapterReader({
           </Pressable>
           <Pressable
             disabled={!next}
-            onPress={() =>
-              next &&
-              router.replace({
-                pathname: "/read/[book]/[chapter]",
-                params: { book: next.book.id, chapter: String(next.chapter) },
-              })
-            }
+            onPress={() => goToChapter("next")}
+            accessibilityLabel={next ? `Next chapter, ${chapterTitle(next.book.name, next.chapter)}. Or swipe left.` : undefined}
             className="flex-row items-center px-4 py-2 rounded-xl active:opacity-60"
             style={{ opacity: next ? 1 : 0.3 }}
           >
@@ -798,6 +980,8 @@ function ChapterReader({
           </Pressable>
         </View>
       )}
+
+      <ReadingSettingsSheet visible={readingOpen} onClose={() => setReadingOpen(false)} dark={dark} />
 
       {deepDiveAvailable && contextNote && (
         <DeepDiveSheet
