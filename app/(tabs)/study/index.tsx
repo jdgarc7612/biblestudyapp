@@ -12,6 +12,7 @@ import { localDateString } from "../../../lib/date";
 import { doneDays, getPlan, isDayOpen, nextDay, readingsLabel, STUDY_PLANS, type StudyPlan } from "../../../lib/plans";
 import { buildReviewQueue, isDue, newRemainingToday, reviewNudgeCount } from "../../../lib/memory";
 import { useAppStore } from "../../../store/useAppStore";
+import { BackButton } from "../../../components/back-button";
 
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
@@ -53,6 +54,7 @@ export default function StudyScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <BackButton onlyAfterLink className="self-start -ml-1 mb-3" />
         <Text className="text-3xl font-bold text-gray-900 dark:text-white mt-1 mb-5">Study</Text>
 
         <TodayCard

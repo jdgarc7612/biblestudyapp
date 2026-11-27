@@ -23,6 +23,7 @@ import { isTranslationId, type FoundReference } from "../../lib/bible";
 import { localDateString } from "../../lib/date";
 import { generateInsightRequestPrompt, VerseContext } from "../../lib/mock-ai";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
 
 const TOPIC_PROMPTS = [
   { label: "Anxiety", prompt: "What does the Bible say about anxiety?" },
@@ -210,7 +211,10 @@ export default function AskAIScreen() {
         keyboardVerticalOffset={90}
       >
         <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-          <Text className="text-lg font-bold text-gray-900 dark:text-white">Ask AI</Text>
+          <View className="flex-row items-center shrink">
+            <BackButton onlyAfterLink className="-ml-1 mr-3" />
+            <Text className="text-lg font-bold text-gray-900 dark:text-white">Ask AI</Text>
+          </View>
           <View className="flex-row items-center" style={{ gap: 16 }}>
             {chatMessages.length > 0 && (
               <Pressable

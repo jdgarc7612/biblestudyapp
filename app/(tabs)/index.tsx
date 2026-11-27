@@ -14,6 +14,7 @@ import { finishedADayOn, getPlan, nextDay, readingsLabel } from "../../lib/plans
 import { isDue, reviewNudgeCount } from "../../lib/memory";
 import { getVerseOfTheDay } from "../../lib/verse-of-the-day";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
 
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
@@ -139,6 +140,7 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
+        <BackButton onlyAfterLink className="self-start -ml-1 mb-3" />
         <View className="flex-row items-start justify-between mb-5">
           <View className="flex-1">
             <Text className="text-sm font-medium text-gray-400 dark:text-gray-500">{today}</Text>

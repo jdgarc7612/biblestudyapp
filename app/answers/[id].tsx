@@ -12,6 +12,8 @@ import { displayQuestion, plainAnswer } from "../../lib/ai-answers";
 import type { FoundReference } from "../../lib/bible";
 import { writeClipboard } from "../../lib/clipboard";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
+import { useBack } from "../../hooks/use-back";
 
 const BLUE = "#4A6FA5";
 
@@ -36,7 +38,7 @@ export default function AnswerScreen() {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setStatus(null), 2600);
   };
-  const goBack = () => (router.canGoBack() ? router.back() : router.replace("/answers"));
+  const { goBack } = useBack("/answers");
   const openReference = (ref: FoundReference) =>
     router.push({
       pathname: "/read/[book]/[chapter]",
@@ -91,9 +93,7 @@ export default function AnswerScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable onPress={goBack} hitSlop={12} accessibilityLabel="Back" className="p-1 mr-2 active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/answers" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1">Answer</Text>
         <Pressable
           onPress={actions[0].onPress}

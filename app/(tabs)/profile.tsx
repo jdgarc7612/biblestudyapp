@@ -12,6 +12,7 @@ import { isDue, isSecure } from "../../lib/memory";
 import { isAccountsConfigured } from "../../lib/supabase";
 import { getSyncStatus, onSyncStatus, SyncStatus } from "../../lib/sync";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
 
 const BADGE_LABELS: Record<string, string> = {
   "read-7": "7-Day Reading Streak",
@@ -229,6 +230,7 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
+        <BackButton onlyAfterLink className="self-start -ml-1 mb-3" />
         <View className="flex-row items-center mb-6">
           <View className="w-14 h-14 rounded-full bg-brand-blue/10 items-center justify-center mr-4">
             <Ionicons name="person" size={24} color="#4A6FA5" />

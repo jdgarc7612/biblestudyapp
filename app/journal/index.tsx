@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StudyRow } from "../../components/study/journal-card";
 import { listStudies } from "../../lib/study-journal";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
 
 const BLUE = "#4A6FA5";
 
@@ -18,14 +19,7 @@ export default function JournalScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/study"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 mr-2 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/study" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1">Your studies</Text>
         <Pressable onPress={() => router.push("/journal/entry")} hitSlop={8} className="flex-row items-center active:opacity-60">
           <Ionicons name="add" size={18} color={BLUE} />

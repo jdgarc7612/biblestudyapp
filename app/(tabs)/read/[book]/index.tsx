@@ -1,6 +1,5 @@
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Redirect, useLocalSearchParams } from "expo-router";
+import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BookOverview } from "../../../../components/read/book-overview";
@@ -9,6 +8,7 @@ import { TranslationPill } from "../../../../components/read/translation-picker"
 import { serifFont } from "../../../../constants/fonts";
 import { BOOKS, getBook } from "../../../../lib/bible";
 import { useAppStore } from "../../../../store/useAppStore";
+import { BackButton } from "../../../../components/back-button";
 
 /** Old links like /read/3 pointed at John (the only book before the full Bible). */
 const LEGACY_JOHN_CHAPTERS = 21;
@@ -22,7 +22,6 @@ export async function generateStaticParams(): Promise<{ book: string }[]> {
 
 export default function BookScreen() {
   const { book: bookParam } = useLocalSearchParams<{ book: string }>();
-  const router = useRouter();
   const lastRead = useAppStore((state) => state.lastRead);
   const book = getBook(bookParam);
 
@@ -36,14 +35,7 @@ export default function BookScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/read"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color="#4A6FA5" />
-        </Pressable>
+        <BackButton fallback="/read" className="p-1" />
         <TranslationPill compact />
       </View>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 }}>

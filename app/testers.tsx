@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { eventLabel, prettyDetail, relativeDay, screenLabel, shortTime } from "../lib/activity-events";
 import { useAccount } from "../lib/auth/account";
 import { getSupabase } from "../lib/supabase";
+import { BackButton } from "../components/back-button";
 
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
@@ -199,7 +199,6 @@ function TesterCard({ tester, isMe }: { tester: Tester; isMe: boolean }) {
 
 /** For the test organizer only: who is using Omeora, when, and which features. */
 export default function TestersScreen() {
-  const router = useRouter();
   const myId = useAccount((s) => s.user?.id ?? null);
   const [testers, setTesters] = useState<Tester[] | null>(null);
   const [feed, setFeed] = useState<ActivityRow[] | null>(null);
@@ -258,14 +257,7 @@ export default function TestersScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 mr-2 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/profile" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1">Testers</Text>
         <Pressable
           onPress={refresh}

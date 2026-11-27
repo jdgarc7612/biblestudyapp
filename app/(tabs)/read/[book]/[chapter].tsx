@@ -50,6 +50,7 @@ import {
   type HighlightColor,
 } from "../../../../lib/verse-marks";
 import { useAppStore } from "../../../../store/useAppStore";
+import { BackButton } from "../../../../components/back-button";
 
 const READ_ENGAGEMENT_SECONDS = 20;
 const BLUE = "#4A6FA5";
@@ -466,14 +467,7 @@ function ChapterReader({
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/read"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color="#4A6FA5" />
-        </Pressable>
+        <BackButton fallback="/read" className="p-1" />
         <View className="flex-row items-center" style={{ gap: 10 }}>
           <Link href={{ pathname: "/read/[book]", params: { book: bookId } }} asChild>
             <Pressable hitSlop={8} accessibilityLabel={`${chapterTitle(book.name, chapterNum)}. Choose a chapter`} className="active:opacity-60">

@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { refreshBetaStatus, useBetaGate } from "../lib/auth/beta-gate";
 import { formatTestDay, isValidEmail, normalizeEmail } from "../lib/beta";
 import { getSupabase } from "../lib/supabase";
+import { BackButton } from "../components/back-button";
 
 const BLUE = "#4A6FA5";
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -28,7 +28,6 @@ interface Invite {
 
 /** For the test organizer: who may sign in, and when the test ends. */
 export default function InviteTestersScreen() {
-  const router = useRouter();
   const status = useBetaGate((s) => s.status);
   const [invites, setInvites] = useState<Invite[] | null>(null);
   const [email, setEmail] = useState("");
@@ -110,14 +109,7 @@ export default function InviteTestersScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 mr-2 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/profile" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1">Invite testers</Text>
         {invites && <Text className="text-sm text-gray-400 dark:text-gray-500">{invites.length}</Text>}
       </View>

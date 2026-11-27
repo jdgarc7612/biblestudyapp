@@ -9,6 +9,7 @@ import { parseCardId } from "../../lib/memory";
 import { decodeChallenge, joinedChallenge } from "../../lib/memory-challenge";
 import { cardsForIds } from "../../lib/memory-text";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
 
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
@@ -57,16 +58,7 @@ export default function JoinChallengeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-4 py-2" style={{ maxWidth: 720, width: "100%", alignSelf: "center" }}>
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace({ pathname: "/study", params: { tab: "memory" } }))}
-          accessibilityRole="button"
-          accessibilityLabel="Back to Memory"
-          hitSlop={12}
-          className="flex-row items-center p-1 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={22} color={BLUE} />
-          <Text className="text-base text-brand-blue">Memory</Text>
-        </Pressable>
+        <BackButton fallback={{ pathname: "/study", params: { tab: "memory" } }} label="Memory" className="p-1" />
       </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"

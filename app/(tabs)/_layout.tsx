@@ -2,6 +2,7 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Platform } from "react-native";
 
+import { markTabPress } from "../../hooks/use-back";
 import { useColorScheme } from "../../hooks/use-color-scheme";
 
 const COLORS = {
@@ -15,6 +16,8 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      // Choosing a tab starts a fresh way back; following a link adds to it (hooks/use-back.ts).
+      screenListeners={{ tabPress: markTabPress }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.active,
