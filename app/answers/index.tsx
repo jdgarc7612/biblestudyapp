@@ -8,6 +8,7 @@ import { AnswerCard } from "../../components/ai/answer-card";
 import { answersCovering, listAnswers, searchAnswers } from "../../lib/ai-answers";
 import { formatReference, getBook } from "../../lib/bible";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
 
 const BLUE = "#4A6FA5";
 type Filter = "all" | "saved";
@@ -43,14 +44,7 @@ export default function AnswersScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/ai"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 mr-2 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/ai" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1">Your answers</Text>
         <Text className="text-sm text-gray-400 dark:text-gray-500">{all.length}</Text>
       </View>

@@ -21,6 +21,7 @@ import {
 } from "../../../../lib/plans";
 import { planReflectionId } from "../../../../lib/reflect";
 import { useAppStore } from "../../../../store/useAppStore";
+import { BackButton } from "../../../../components/back-button";
 
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
@@ -73,14 +74,7 @@ export default function PlanScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/study"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 mr-2 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/study" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1" numberOfLines={1}>
           Guided study
         </Text>

@@ -38,6 +38,8 @@ import {
   type StudyEntry,
 } from "../../lib/study-journal";
 import { useAppStore } from "../../store/useAppStore";
+import { BackButton } from "../../components/back-button";
+import { useBack } from "../../hooks/use-back";
 
 const BLUE = "#4A6FA5";
 const EARTH = "#C19A6B";
@@ -80,16 +82,14 @@ export default function StudyEntryScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setView(next);
   };
-  const close = () => (router.canGoBack() ? router.back() : router.replace("/study"));
+  const { goBack: close } = useBack("/study");
 
   const missing = params.id && (!entry || entry.deleted) && view.kind !== "pick" && view.kind !== "intro";
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top", "bottom"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable onPress={close} hitSlop={12} accessibilityLabel="Back" className="p-1 mr-2 active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/study" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1" numberOfLines={1}>
           {view.kind === "pick" ? "Start a study" : entry ? entry.reference : "SOAP study"}
         </Text>

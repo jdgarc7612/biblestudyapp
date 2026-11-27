@@ -12,6 +12,7 @@ import { byPassage, listNotes, type NoteEntry } from "../lib/notes";
 import { listPlanAnswers, readingsLabel } from "../lib/plans";
 import { listSaved } from "../lib/verse-marks";
 import { useAppStore } from "../store/useAppStore";
+import { BackButton } from "../components/back-button";
 
 const BLUE = "#4A6FA5";
 type Order = "recent" | "bible";
@@ -112,14 +113,7 @@ export default function NotesScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top"]}>
       <View className="flex-row items-center px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-          hitSlop={12}
-          accessibilityLabel="Back"
-          className="p-1 mr-2 active:opacity-60"
-        >
-          <Ionicons name="chevron-back" size={24} color={BLUE} />
-        </Pressable>
+        <BackButton fallback="/" className="p-1 mr-2" />
         <Text className="text-lg font-bold text-gray-900 dark:text-white flex-1">
           {tab === "saved" ? "Saved verses" : tab === "answers" ? "Saved answers" : "My notes"}
         </Text>

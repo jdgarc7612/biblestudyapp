@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AI_DAILY_QUESTION_LIMIT } from "../lib/ai-config";
 import { useAppStore } from "../store/useAppStore";
 import { StreakKind, STREAK_FREEZE_COST } from "../lib/rewards";
+import { BackButton } from "../components/back-button";
 
 const COMING_SOON_ITEMS = [
   { icon: "color-palette-outline" as const, label: "Reading theme", costLabel: "15-30 tokens" },
@@ -59,7 +59,6 @@ function FreezeRow({
 }
 
 export default function ShopScreen() {
-  const router = useRouter();
   const tokenBalance = useAppStore((state) => state.tokenBalance);
   const readStreakFreezesAvailable = useAppStore((state) => state.readStreakFreezesAvailable);
   const memoryStreakFreezesAvailable = useAppStore((state) => state.memoryStreakFreezesAvailable);
@@ -78,9 +77,7 @@ export default function ShopScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900" edges={["top", "bottom"]}>
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-1 active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color="#4A6FA5" />
-        </Pressable>
+        <BackButton fallback="/profile" className="p-1" />
         <Text className="text-base font-semibold text-gray-900 dark:text-white">
           Rewards Shop
         </Text>

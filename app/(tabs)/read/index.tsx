@@ -10,6 +10,7 @@ import { TranslationPill } from "../../../components/read/translation-picker";
 import { serifFont } from "../../../constants/fonts";
 import { BOOKS, chapterTitle, getBook, getTranslation } from "../../../lib/bible";
 import { useAppStore } from "../../../store/useAppStore";
+import { BackButton } from "../../../components/back-button";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -44,6 +45,7 @@ export default function ReadScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
+        <BackButton onlyAfterLink className="self-start -ml-1 mb-3" />
         <View className="flex-row items-end justify-between mb-6">
           <View className="flex-1 pr-3">
             <Text className="text-sm font-medium text-gray-400 dark:text-gray-500">

@@ -1,14 +1,16 @@
-import { Stack, usePathname } from "expo-router";
+import { Stack, useNavigationContainerRef, usePathname } from "expo-router";
 import Head from "expo-router/head";
 import { useEffect } from "react";
 import "../global.css";
 
+import { recordPlace } from "../hooks/use-back";
 import { useGateView } from "../hooks/use-gate-view";
 import { trackScreen } from "../lib/activity";
 import { useMemoryReminders } from "../hooks/use-memory-reminders";
 import { initAccount } from "../lib/auth/account";
 import { initBetaGate } from "../lib/auth/beta-gate";
 import { noteScreen } from "../lib/feedback";
+import { focusedPlace, type NavState } from "../lib/nav-trail";
 
 export default function RootLayout() {
   const pathname = usePathname();
@@ -26,6 +28,19 @@ export default function RootLayout() {
     noteScreen(pathname);
     trackScreen(pathname);
   }, [pathname]);
+
+  // The way back (lib/nav-trail.ts): every screen someone lands on goes on the trail.
+  const navRef = useNavigationContainerRef();
+  useEffect(() => {
+    const record = () => {
+      const state = navRef.getRootState() as unknown as NavState | undefined;
+      const place = focusedPlace(state);
+      if (place) recordPlace(place, state);
+    };
+    const unsubscribe = navRef.addListener("state", record);
+    if (navRef.isReady()) record();
+    return unsubscribe;
+  }, [navRef]);
 
   return (
     <>

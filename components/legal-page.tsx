@@ -1,22 +1,17 @@
-import { useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { serifFont } from "../constants/fonts";
 import { LEGAL_DRAFT, LEGAL_UPDATED, OPERATOR, type LegalSection } from "../data/legal";
+import { BackButton } from "./back-button";
 
 /** A calm, readable page for the Privacy Policy and Terms of Use. */
 export function LegalPage({ title, sections }: { title: string; sections: LegalSection[] }) {
-  const router = useRouter();
-  const back = () => (router.canGoBack() ? router.back() : router.replace("/profile"));
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
       <View className="flex-row items-center px-4 py-2">
-        <Pressable onPress={back} hitSlop={12} accessibilityLabel="Back" className="p-2 active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color="#4A6FA5" />
-        </Pressable>
+        <BackButton fallback="/profile" className="p-2" />
       </View>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48, maxWidth: 680, width: "100%", alignSelf: "center" }}
